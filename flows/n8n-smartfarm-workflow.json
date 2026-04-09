@@ -1,0 +1,517 @@
+{
+  "name": "SmartFarm ESP32 Automation",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "sticky-telemetry-section",
+      "name": "Sticky Note — Telemetry",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [240, 140],
+      "parameters": {
+        "content": "## Telemetry Pipeline\nรับข้อมูลเซ็นเซอร์จาก Node-RED\nตรวจสอบ: water_overflow, water_dry, air_temp",
+        "height": 80,
+        "width": 600,
+        "color": 4
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Status Pipeline\nรับสถานะ device จาก Node-RED\nตรวจสอบ: online / offline",
+        "height": 80,
+        "width": 500,
+        "color": 5
+      },
+      "id": "sticky-status-section",
+      "name": "Sticky Note — Status",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [240, 600]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "smartfarm-telemetry",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-telemetry",
+      "name": "Webhook: Telemetry",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [280, 280],
+      "webhookId": "smartfarm-telemetry-001"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f1",
+              "name": "board_id",
+              "value": "={{ $json.body.board_id }}",
+              "type": "string"
+            },
+            {
+              "id": "f2",
+              "name": "timestamp_ms",
+              "value": "={{ $json.body.timestamp }}",
+              "type": "number"
+            },
+            {
+              "id": "f3",
+              "name": "rssi",
+              "value": "={{ $json.body.rssi }}",
+              "type": "number"
+            },
+            {
+              "id": "f4",
+              "name": "water_temp",
+              "value": "={{ $json.body.sensors.water_temp }}",
+              "type": "number"
+            },
+            {
+              "id": "f5",
+              "name": "air_temp",
+              "value": "={{ $json.body.sensors.air_temp }}",
+              "type": "number"
+            },
+            {
+              "id": "f6",
+              "name": "air_humidity",
+              "value": "={{ $json.body.sensors.air_humidity }}",
+              "type": "number"
+            },
+            {
+              "id": "f7",
+              "name": "water_overflow",
+              "value": "={{ $json.body.sensors.water_overflow }}",
+              "type": "boolean"
+            },
+            {
+              "id": "f8",
+              "name": "water_dry",
+              "value": "={{ $json.body.sensors.water_dry }}",
+              "type": "boolean"
+            },
+            {
+              "id": "f9",
+              "name": "relay1_pump",
+              "value": "={{ $json.body.relays.relay1_pump }}",
+              "type": "boolean"
+            },
+            {
+              "id": "f10",
+              "name": "relay2_fan",
+              "value": "={{ $json.body.relays.relay2_fan }}",
+              "type": "boolean"
+            },
+            {
+              "id": "f11",
+              "name": "relay3_heater",
+              "value": "={{ $json.body.relays.relay3_heater }}",
+              "type": "boolean"
+            },
+            {
+              "id": "f12",
+              "name": "received_at",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-telemetry-fields",
+      "name": "Extract Telemetry Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [500, 280]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.water_overflow }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            },
+            {
+              "id": "c2",
+              "leftValue": "={{ $json.water_dry }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "if-water-alert",
+      "name": "IF: Water Alert?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [720, 280]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "c3",
+              "leftValue": "={{ $json.air_temp }}",
+              "rightValue": 35,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-temp-alert",
+      "name": "IF: Temp > 35°C?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [720, 420]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "alert_type",
+              "value": "={{ $json.water_overflow ? 'WATER_OVERFLOW' : 'WATER_DRY' }}",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "alert_message",
+              "value": "={{ $json.water_overflow ? '[ALERT] น้ำล้น! กรุณาตรวจสอบระบบปั๊มน้ำ' : '[ALERT] น้ำหมด/แห้ง! กรุณาเติมน้ำ' }}",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "board_id",
+              "value": "={{ $json.board_id }}",
+              "type": "string"
+            },
+            {
+              "id": "a4",
+              "name": "triggered_at",
+              "value": "={{ $json.received_at }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-water-alert-msg",
+      "name": "Set Water Alert Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [940, 220]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b1",
+              "name": "alert_type",
+              "value": "TEMP_HIGH",
+              "type": "string"
+            },
+            {
+              "id": "b2",
+              "name": "alert_message",
+              "value": "=[ALERT] อุณหภูมิสูงเกิน! air_temp={{ $json.air_temp }}°C (เกณฑ์ 35°C)",
+              "type": "string"
+            },
+            {
+              "id": "b3",
+              "name": "board_id",
+              "value": "={{ $json.board_id }}",
+              "type": "string"
+            },
+            {
+              "id": "b4",
+              "name": "air_temp",
+              "value": "={{ $json.air_temp }}",
+              "type": "number"
+            },
+            {
+              "id": "b5",
+              "name": "triggered_at",
+              "value": "={{ $json.received_at }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-temp-alert-msg",
+      "name": "Set Temp Alert Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [940, 380]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"ok\", \"received\": \"telemetry\", \"timestamp\": \"{{ $now.toISO() }}\" }",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "respond-telemetry-ok",
+      "name": "Respond 200 OK (Telemetry)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [940, 500]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "smartfarm-status",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-status",
+      "name": "Webhook: Status",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [280, 720],
+      "webhookId": "smartfarm-status-001"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "s1",
+              "name": "board_id",
+              "value": "={{ $json.body.board_id }}",
+              "type": "string"
+            },
+            {
+              "id": "s2",
+              "name": "status",
+              "value": "={{ $json.body.status }}",
+              "type": "string"
+            },
+            {
+              "id": "s3",
+              "name": "ip",
+              "value": "={{ $json.body.ip }}",
+              "type": "string"
+            },
+            {
+              "id": "s4",
+              "name": "firmware",
+              "value": "={{ $json.body.firmware }}",
+              "type": "string"
+            },
+            {
+              "id": "s5",
+              "name": "uptime_sec",
+              "value": "={{ $json.body.uptime }}",
+              "type": "number"
+            },
+            {
+              "id": "s6",
+              "name": "uptime_hours",
+              "value": "={{ ($json.body.uptime / 3600).toFixed(2) }}",
+              "type": "string"
+            },
+            {
+              "id": "s7",
+              "name": "received_at",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-status-fields",
+      "name": "Extract Status Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [500, 720]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "d1",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "offline",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-device-offline",
+      "name": "IF: Device Offline?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [720, 720]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e1",
+              "name": "alert_type",
+              "value": "DEVICE_OFFLINE",
+              "type": "string"
+            },
+            {
+              "id": "e2",
+              "name": "alert_message",
+              "value": "=[ALERT] ESP32 Offline! board_id={{ $json.board_id }} ไม่มีการเชื่อมต่อ",
+              "type": "string"
+            },
+            {
+              "id": "e3",
+              "name": "board_id",
+              "value": "={{ $json.board_id }}",
+              "type": "string"
+            },
+            {
+              "id": "e4",
+              "name": "last_ip",
+              "value": "={{ $json.ip }}",
+              "type": "string"
+            },
+            {
+              "id": "e5",
+              "name": "triggered_at",
+              "value": "={{ $json.received_at }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-offline-alert-msg",
+      "name": "Set Offline Alert Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [940, 660]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"ok\", \"received\": \"device-status\", \"timestamp\": \"{{ $now.toISO() }}\" }",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "respond-status-ok",
+      "name": "Respond 200 OK (Status)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [940, 800]
+    }
+  ],
+  "connections": {
+    "Webhook: Telemetry": {
+      "main": [
+        [
+          { "node": "Extract Telemetry Fields", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Extract Telemetry Fields": {
+      "main": [
+        [
+          { "node": "IF: Water Alert?", "type": "main", "index": 0 },
+          { "node": "IF: Temp > 35°C?", "type": "main", "index": 0 },
+          { "node": "Respond 200 OK (Telemetry)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "IF: Water Alert?": {
+      "main": [
+        [
+          { "node": "Set Water Alert Message", "type": "main", "index": 0 }
+        ],
+        []
+      ]
+    },
+    "IF: Temp > 35°C?": {
+      "main": [
+        [
+          { "node": "Set Temp Alert Message", "type": "main", "index": 0 }
+        ],
+        []
+      ]
+    },
+    "Webhook: Status": {
+      "main": [
+        [
+          { "node": "Extract Status Fields", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Extract Status Fields": {
+      "main": [
+        [
+          { "node": "IF: Device Offline?", "type": "main", "index": 0 },
+          { "node": "Respond 200 OK (Status)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "IF: Device Offline?": {
+      "main": [
+        [
+          { "node": "Set Offline Alert Message", "type": "main", "index": 0 }
+        ],
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "smartfarm-esp32"
+  }
+}

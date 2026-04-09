@@ -1,0 +1,404 @@
+{
+  "name": "SmartFarm ESP32 — Auto Relay Control",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Pipeline 1: Telemetry → Auto Relay Control\nรับ Telemetry จาก Node-RED → ตรวจ condition → สั่ง relay กลับอัตโนมัติ",
+        "height": 80,
+        "width": 900,
+        "color": 4
+      },
+      "id": "sticky-telemetry",
+      "name": "Sticky: Telemetry Pipeline",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [220, 140]
+    },
+    {
+      "parameters": {
+        "content": "## Pipeline 2: Status Monitor\nรับ Status จาก Node-RED → ตรวจ online/offline",
+        "height": 80,
+        "width": 600,
+        "color": 5
+      },
+      "id": "sticky-status",
+      "name": "Sticky: Status Pipeline",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [220, 820]
+    },
+    {
+      "parameters": {
+        "content": "### Auto-Control Rules\n- **water_overflow = true** → ปิด Pump ทันที (ALL OFF)\n- **water_dry = true** → เปิด Pump (เติมน้ำ)\n- **air_temp ≥ 35°C** → เปิด Fan\n- **device offline** → แจ้งเตือนเท่านั้น (ส่งคำสั่งไม่ได้)",
+        "height": 140,
+        "width": 360,
+        "color": 3
+      },
+      "id": "sticky-rules",
+      "name": "Sticky: Rules",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1200, 140]
+    },
+
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "smartfarm-telemetry",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-telemetry",
+      "name": "Webhook: Telemetry",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [260, 300],
+      "webhookId": "smartfarm-telemetry-001"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "f1",  "name": "board_id",       "value": "={{ $json.body.board_id }}",                     "type": "string" },
+            { "id": "f2",  "name": "timestamp_ms",   "value": "={{ $json.body.timestamp }}",                   "type": "number" },
+            { "id": "f3",  "name": "rssi",            "value": "={{ $json.body.rssi }}",                        "type": "number" },
+            { "id": "f4",  "name": "water_temp",      "value": "={{ $json.body.sensors.water_temp }}",          "type": "number" },
+            { "id": "f5",  "name": "air_temp",        "value": "={{ $json.body.sensors.air_temp }}",            "type": "number" },
+            { "id": "f6",  "name": "air_humidity",    "value": "={{ $json.body.sensors.air_humidity }}",        "type": "number" },
+            { "id": "f7",  "name": "water_overflow",  "value": "={{ $json.body.sensors.water_overflow }}",      "type": "boolean" },
+            { "id": "f8",  "name": "water_dry",       "value": "={{ $json.body.sensors.water_dry }}",           "type": "boolean" },
+            { "id": "f9",  "name": "relay1_pump",     "value": "={{ $json.body.relays.relay1_pump }}",          "type": "boolean" },
+            { "id": "f10", "name": "relay2_fan",      "value": "={{ $json.body.relays.relay2_fan }}",           "type": "boolean" },
+            { "id": "f11", "name": "relay3_heater",   "value": "={{ $json.body.relays.relay3_heater }}",        "type": "boolean" },
+            { "id": "f12", "name": "received_at",     "value": "={{ $now.toISO() }}",                          "type": "string" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-telemetry-fields",
+      "name": "Extract Telemetry Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [480, 300]
+    },
+
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            { "id": "c1", "leftValue": "={{ $json.water_overflow }}", "rightValue": true, "operator": { "type": "boolean", "operation": "true" } }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-water-overflow",
+      "name": "IF: water_overflow?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [700, 220]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            { "id": "c2", "leftValue": "={{ $json.water_dry }}", "rightValue": true, "operator": { "type": "boolean", "operation": "true" } }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-water-dry",
+      "name": "IF: water_dry?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [700, 360]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            { "id": "c3", "leftValue": "={{ $json.air_temp }}", "rightValue": 35, "operator": { "type": "number", "operation": "gte" } }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-temp-high",
+      "name": "IF: air_temp ≥ 35°C?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [700, 500]
+    },
+
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "a1", "name": "command",        "value": "relay_control",   "type": "string" },
+            { "id": "a2", "name": "relay1_pump",    "value": false,             "type": "boolean" },
+            { "id": "a3", "name": "relay2_fan",     "value": false,             "type": "boolean" },
+            { "id": "a4", "name": "relay3_heater",  "value": false,             "type": "boolean" },
+            { "id": "a5", "name": "triggered_by",   "value": "n8n_auto",        "type": "string" },
+            { "id": "a6", "name": "reason",         "value": "water_overflow",  "type": "string" },
+            { "id": "a7", "name": "board_id",       "value": "={{ $json.board_id }}", "type": "string" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-cmd-all-off",
+      "name": "CMD: ALL OFF (น้ำล้น)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [940, 180]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "b1", "name": "command",        "value": "relay_control",  "type": "string" },
+            { "id": "b2", "name": "relay1_pump",    "value": true,             "type": "boolean" },
+            { "id": "b3", "name": "relay2_fan",     "value": false,            "type": "boolean" },
+            { "id": "b4", "name": "relay3_heater",  "value": false,            "type": "boolean" },
+            { "id": "b5", "name": "triggered_by",   "value": "n8n_auto",       "type": "string" },
+            { "id": "b6", "name": "reason",         "value": "water_dry",      "type": "string" },
+            { "id": "b7", "name": "board_id",       "value": "={{ $json.board_id }}", "type": "string" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-cmd-pump-on",
+      "name": "CMD: Pump ON (น้ำแห้ง)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [940, 320]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "d1", "name": "command",        "value": "relay_control",  "type": "string" },
+            { "id": "d2", "name": "relay1_pump",    "value": false,            "type": "boolean" },
+            { "id": "d3", "name": "relay2_fan",     "value": true,             "type": "boolean" },
+            { "id": "d4", "name": "relay3_heater",  "value": false,            "type": "boolean" },
+            { "id": "d5", "name": "triggered_by",   "value": "n8n_auto",       "type": "string" },
+            { "id": "d6", "name": "reason",         "value": "temp_high",      "type": "string" },
+            { "id": "d7", "name": "board_id",       "value": "={{ $json.board_id }}", "type": "string" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-cmd-fan-on",
+      "name": "CMD: Fan ON (ร้อน)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [940, 460]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:1880/smartfarm/relay-control",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"command\": \"relay_control\",\n  \"relays\": {\n    \"relay1_pump\":   {{ $json.relay1_pump }},\n    \"relay2_fan\":    {{ $json.relay2_fan }},\n    \"relay3_heater\": {{ $json.relay3_heater }}\n  },\n  \"triggered_by\": \"{{ $json.triggered_by }}\",\n  \"reason\":        \"{{ $json.reason }}\",\n  \"board_id\":      \"{{ $json.board_id }}\"\n}",
+        "options": {}
+      },
+      "id": "http-post-nodered-overflow",
+      "name": "→ NodeRED: ALL OFF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1180, 180]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:1880/smartfarm/relay-control",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"command\": \"relay_control\",\n  \"relays\": {\n    \"relay1_pump\":   {{ $json.relay1_pump }},\n    \"relay2_fan\":    {{ $json.relay2_fan }},\n    \"relay3_heater\": {{ $json.relay3_heater }}\n  },\n  \"triggered_by\": \"{{ $json.triggered_by }}\",\n  \"reason\":        \"{{ $json.reason }}\",\n  \"board_id\":      \"{{ $json.board_id }}\"\n}",
+        "options": {}
+      },
+      "id": "http-post-nodered-dry",
+      "name": "→ NodeRED: Pump ON",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1180, 320]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:1880/smartfarm/relay-control",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"command\": \"relay_control\",\n  \"relays\": {\n    \"relay1_pump\":   {{ $json.relay1_pump }},\n    \"relay2_fan\":    {{ $json.relay2_fan }},\n    \"relay3_heater\": {{ $json.relay3_heater }}\n  },\n  \"triggered_by\": \"{{ $json.triggered_by }}\",\n  \"reason\":        \"{{ $json.reason }}\",\n  \"board_id\":      \"{{ $json.board_id }}\"\n}",
+        "options": {}
+      },
+      "id": "http-post-nodered-temp",
+      "name": "→ NodeRED: Fan ON",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1180, 460]
+    },
+
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"ok\", \"received\": \"telemetry\", \"timestamp\": \"{{ $now.toISO() }}\" }",
+        "options": { "responseCode": 200 }
+      },
+      "id": "respond-telemetry-ok",
+      "name": "Respond 200 OK (Telemetry)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [940, 600]
+    },
+
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "smartfarm-status",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-status",
+      "name": "Webhook: Status",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [260, 960],
+      "webhookId": "smartfarm-status-001"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "s1", "name": "board_id",     "value": "={{ $json.body.board_id }}",                              "type": "string" },
+            { "id": "s2", "name": "status",       "value": "={{ $json.body.status }}",                               "type": "string" },
+            { "id": "s3", "name": "ip",           "value": "={{ $json.body.ip }}",                                   "type": "string" },
+            { "id": "s4", "name": "firmware",     "value": "={{ $json.body.firmware }}",                             "type": "string" },
+            { "id": "s5", "name": "uptime_sec",   "value": "={{ $json.body.uptime }}",                               "type": "number" },
+            { "id": "s6", "name": "uptime_hours", "value": "={{ ($json.body.uptime / 3600).toFixed(2) }}",           "type": "string" },
+            { "id": "s7", "name": "received_at",  "value": "={{ $now.toISO() }}",                                    "type": "string" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-status-fields",
+      "name": "Extract Status Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [480, 960]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            { "id": "d1", "leftValue": "={{ $json.status }}", "rightValue": "offline", "operator": { "type": "string", "operation": "equals" } }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-device-offline",
+      "name": "IF: Device Offline?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [700, 960]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "e1", "name": "alert_type",    "value": "DEVICE_OFFLINE", "type": "string" },
+            { "id": "e2", "name": "alert_message", "value": "={{ '[ALERT] ESP32 Offline: ' + $json.board_id + ' (last IP: ' + $json.ip + ')' }}", "type": "string" },
+            { "id": "e3", "name": "board_id",      "value": "={{ $json.board_id }}", "type": "string" },
+            { "id": "e4", "name": "last_ip",       "value": "={{ $json.ip }}", "type": "string" },
+            { "id": "e5", "name": "triggered_at",  "value": "={{ $json.received_at }}", "type": "string" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-offline-alert",
+      "name": "Set Offline Alert",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [940, 900]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"ok\", \"received\": \"device-status\", \"timestamp\": \"{{ $now.toISO() }}\" }",
+        "options": { "responseCode": 200 }
+      },
+      "id": "respond-status-ok",
+      "name": "Respond 200 OK (Status)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [940, 1020]
+    }
+  ],
+
+  "connections": {
+    "Webhook: Telemetry": {
+      "main": [[{ "node": "Extract Telemetry Fields", "type": "main", "index": 0 }]]
+    },
+    "Extract Telemetry Fields": {
+      "main": [[
+        { "node": "IF: water_overflow?",       "type": "main", "index": 0 },
+        { "node": "IF: water_dry?",            "type": "main", "index": 0 },
+        { "node": "IF: air_temp ≥ 35°C?",     "type": "main", "index": 0 },
+        { "node": "Respond 200 OK (Telemetry)","type": "main", "index": 0 }
+      ]]
+    },
+    "IF: water_overflow?": {
+      "main": [
+        [{ "node": "CMD: ALL OFF (น้ำล้น)", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "IF: water_dry?": {
+      "main": [
+        [{ "node": "CMD: Pump ON (น้ำแห้ง)", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "IF: air_temp ≥ 35°C?": {
+      "main": [
+        [{ "node": "CMD: Fan ON (ร้อน)", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "CMD: ALL OFF (น้ำล้น)": {
+      "main": [[{ "node": "→ NodeRED: ALL OFF", "type": "main", "index": 0 }]]
+    },
+    "CMD: Pump ON (น้ำแห้ง)": {
+      "main": [[{ "node": "→ NodeRED: Pump ON", "type": "main", "index": 0 }]]
+    },
+    "CMD: Fan ON (ร้อน)": {
+      "main": [[{ "node": "→ NodeRED: Fan ON", "type": "main", "index": 0 }]]
+    },
+    "Webhook: Status": {
+      "main": [[{ "node": "Extract Status Fields", "type": "main", "index": 0 }]]
+    },
+    "Extract Status Fields": {
+      "main": [[
+        { "node": "IF: Device Offline?",      "type": "main", "index": 0 },
+        { "node": "Respond 200 OK (Status)",  "type": "main", "index": 0 }
+      ]]
+    },
+    "IF: Device Offline?": {
+      "main": [
+        [{ "node": "Set Offline Alert", "type": "main", "index": 0 }],
+        []
+      ]
+    }
+  },
+
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "meta": { "templateCredsSetupCompleted": true }
+}
