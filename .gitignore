@@ -1,0 +1,23 @@
+# ════════════════════════════════════════════════════════
+#  .gitignore
+# ════════════════════════════════════════════════════════
+
+# Environment variables (contains secrets — never commit)
+.env
+
+# Node-RED data
+node-red/data/
+
+# n8n data
+n8n/data/
+
+# Docker volumes / local data
+volumes/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/

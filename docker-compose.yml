@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+
+  # ════════════════════════════════════════════════════════
+  #  Mosquitto — Local MQTT Broker
+  #  MQTT  : localhost:1883
+  #  WS    : localhost:9001
+  # ════════════════════════════════════════════════════════
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: mosquitto
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_log:/mosquitto/log
+    restart: unless-stopped
+    networks:
+      - iot_network
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/#", "-C", "1", "-i", "healthcheck", "-W", "3"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ════════════════════════════════════════════════════════
+  #  Node-RED — OPC-UA Reader + MQTT Publisher
+  #  UI : http://localhost:1880
+  # ════════════════════════════════════════════════════════
+  nodered:
+    image: nodered/node-red:latest
+    container_name: nodered
+    ports:
+      - "1880:1880"
+    volumes:
+      - nodered_data:/data
+      - ./nodered/settings.js:/data/settings.js:ro
+    environment:
+      - TZ=${TZ}
+      - OPC_SERVER_IP=${OPC_SERVER_IP}
+      - OPC_SERVER_PORT=${OPC_SERVER_PORT}
+    restart: unless-stopped
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    networks:
+      - iot_network
+
+  # ════════════════════════════════════════════════════════
+  #  N8N — Workflow Automation
+  #  UI : http://localhost:5678
+  # ════════════════════════════════════════════════════════
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    environment:
+      - TZ=${TZ}
+      - GENERIC_TIMEZONE=${TZ}
+      - N8N_HOST=0.0.0.0
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=https
+      - WEBHOOK_URL=${NGROK_URL}/
+      - N8N_EDITOR_BASE_URL=${NGROK_URL}/
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      - N8N_METRICS=false
+      - EXECUTIONS_DATA_PRUNE=true
+      - EXECUTIONS_DATA_MAX_AGE=168
+    restart: unless-stopped
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    networks:
+      - iot_network
+
+# ════════════════════════════════════════════════════════
+#  Networks & Volumes
+# ════════════════════════════════════════════════════════
+networks:
+  iot_network:
+    driver: bridge
+
+volumes:
+  nodered_data:
+  n8n_data:
+  mosquitto_data:
+  mosquitto_log:
