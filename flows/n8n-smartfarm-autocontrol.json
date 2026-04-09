@@ -29,9 +29,9 @@
     },
     {
       "parameters": {
-        "content": "### Auto-Control Rules\n- **water_overflow = true** → ปิด Pump ทันที (ALL OFF)\n- **water_dry = true** → เปิด Pump (เติมน้ำ)\n- **air_temp ≥ 35°C** → เปิด Fan\n- **device offline** → แจ้งเตือนเท่านั้น (ส่งคำสั่งไม่ได้)",
-        "height": 140,
-        "width": 360,
+        "content": "### Auto-Control Rules\n- **water_overflow = true** → ปิด Pump ทันที (ALL OFF) — เฉพาะตอนที่ยังมี relay เปิดอยู่\n- **water_dry = true** → เปิด Pump (เติมน้ำ) — เฉพาะตอน relay1_pump ปิดอยู่\n- **air_temp ≥ 35°C** → เปิด Fan — เฉพาะตอน relay2_fan ปิดอยู่\n- **device offline** → แจ้งเตือนเท่านั้น (ส่งคำสั่งไม่ได้)\n\n**Anti-loop:** เช็ค relay state ก่อนส่งคำสั่งทุกครั้ง",
+        "height": 160,
+        "width": 400,
         "color": 3
       },
       "id": "sticky-rules",
@@ -132,6 +132,60 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [700, 500]
+    },
+
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            { "id": "r1a", "leftValue": "={{ $json.relay1_pump }}",   "operator": { "type": "boolean", "operation": "true" } },
+            { "id": "r1b", "leftValue": "={{ $json.relay2_fan }}",    "operator": { "type": "boolean", "operation": "true" } },
+            { "id": "r1c", "leftValue": "={{ $json.relay3_heater }}", "operator": { "type": "boolean", "operation": "true" } }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "if-any-relay-on",
+      "name": "IF: any relay ON? (anti-loop)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [840, 220]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            { "id": "r2", "leftValue": "={{ $json.relay1_pump }}", "operator": { "type": "boolean", "operation": "false" } }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-relay1-pump-off",
+      "name": "IF: relay1_pump OFF? (anti-loop)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [840, 360]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            { "id": "r3", "leftValue": "={{ $json.relay2_fan }}", "operator": { "type": "boolean", "operation": "false" } }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-relay2-fan-off",
+      "name": "IF: relay2_fan OFF? (anti-loop)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [840, 500]
     },
 
     {
@@ -356,17 +410,35 @@
     },
     "IF: water_overflow?": {
       "main": [
-        [{ "node": "CMD: ALL OFF (น้ำล้น)", "type": "main", "index": 0 }],
+        [{ "node": "IF: any relay ON? (anti-loop)", "type": "main", "index": 0 }],
         []
       ]
     },
     "IF: water_dry?": {
       "main": [
-        [{ "node": "CMD: Pump ON (น้ำแห้ง)", "type": "main", "index": 0 }],
+        [{ "node": "IF: relay1_pump OFF? (anti-loop)", "type": "main", "index": 0 }],
         []
       ]
     },
     "IF: air_temp ≥ 35°C?": {
+      "main": [
+        [{ "node": "IF: relay2_fan OFF? (anti-loop)", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "IF: any relay ON? (anti-loop)": {
+      "main": [
+        [{ "node": "CMD: ALL OFF (น้ำล้น)", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "IF: relay1_pump OFF? (anti-loop)": {
+      "main": [
+        [{ "node": "CMD: Pump ON (น้ำแห้ง)", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "IF: relay2_fan OFF? (anti-loop)": {
       "main": [
         [{ "node": "CMD: Fan ON (ร้อน)", "type": "main", "index": 0 }],
         []

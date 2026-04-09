@@ -589,6 +589,135 @@ POST http://localhost:1880/smartfarm/relay-control
 3. ถ้าผิดรูปแบบ → ส่ง HTTP 400 กลับ ไม่ส่ง MQTT
 4. แสดง status บน canvas (สีเขียว + reason)
 
+---
+
+### โค้ด Function Node — อธิบายทีละส่วน
+
+```js
+const body = msg.payload;
+```
+> รับ body ของ HTTP POST ที่ N8N ส่งมา — ข้อมูลทั้งหมดอยู่ใน `msg.payload`  
+> (Node-RED HTTP In node จะ parse JSON ให้อัตโนมัติ)
+
+---
+
+```js
+if (!body || body.command !== 'relay_control' || !body.relays) {
+    node.warn('Invalid command: ' + JSON.stringify(body));
+    const errRes = { payload: { status: 'error', message: 'Invalid command format' }, statusCode: 400 };
+    return [null, errRes];
+}
+```
+> **Guard clause** — ตรวจสอบ 3 เงื่อนไขก่อนทำงาน:
+>
+> | เงื่อนไข | ความหมาย |
+> |---------|---------|
+> | `!body` | ไม่มีข้อมูลเลย (body ว่าง/null) |
+> | `body.command !== 'relay_control'` | command ผิดประเภท |
+> | `!body.relays` | ไม่มี relays object (ไม่รู้จะสั่ง relay ไหน) |
+>
+> ถ้าผิดเงื่อนไขใดข้อหนึ่ง:
+> - `node.warn(...)` → แสดง warning ใน Debug panel
+> - `return [null, errRes]` → ส่งออก **Output 2** เป็น HTTP 400 และ **Output 1 เป็น null** (ไม่ส่ง MQTT)
+
+---
+
+```js
+const mqttMsg = {
+    payload: {
+        command: 'relay_control',
+        relays: {
+            relay1_pump:   body.relays.relay1_pump   !== undefined ? body.relays.relay1_pump   : false,
+            relay2_fan:    body.relays.relay2_fan    !== undefined ? body.relays.relay2_fan    : false,
+            relay3_heater: body.relays.relay3_heater !== undefined ? body.relays.relay3_heater : false
+        }
+    },
+    topic: ''
+};
+```
+> **สร้าง MQTT message** ที่จะส่งให้ ESP32
+>
+> **Pattern:** `ค่าจาก body !== undefined ? ใช้ค่านั้น : false`  
+> = ถ้า N8N ส่ง relay มาครบก็ใช้ค่านั้น แต่ถ้าไม่ได้ส่งฟิลด์ไหนมา (undefined) ให้ default เป็น `false`
+>
+> ตัวอย่าง: N8N ส่งมาแค่ `relay2_fan: true` โดยไม่ส่ง relay อื่น  
+> → relay1_pump = **false** (default), relay2_fan = **true**, relay3_heater = **false** (default)
+>
+> `topic: ''` → ปล่อยว่างเพราะ topic ถูกกำหนดไว้ใน MQTT Out node แล้ว
+
+---
+
+```js
+const resMsg = {
+    payload: {
+        status: 'ok',
+        action:       body.reason       || 'manual',
+        triggered_by: body.triggered_by || 'unknown',
+        relays:       mqttMsg.payload.relays,
+        timestamp:    new Date().toISOString()
+    },
+    statusCode: 200
+};
+```
+> **สร้าง HTTP Response** ที่จะส่งกลับไปหา N8N (ยืนยันว่ารับคำสั่งแล้ว)
+>
+> | Field | ความหมาย | ตัวอย่าง |
+> |-------|---------|---------|
+> | `status` | ผลการทำงาน | `"ok"` |
+> | `action` | เหตุผลที่สั่ง (จาก `body.reason`) | `"temp_high"`, `"water_dry"` |
+> | `triggered_by` | ต้นทางที่สั่ง (จาก `body.triggered_by`) | `"n8n_auto"` |
+> | `relays` | relay states จริงที่ส่ง MQTT ไป | `{relay1_pump:false, relay2_fan:true, ...}` |
+> | `timestamp` | เวลาที่ประมวลผล | `"2026-04-10T10:30:00.000Z"` |
+>
+> **`||` (OR)** — ใช้ fallback ถ้าค่าหลักเป็น falsy:
+> - `body.reason || 'manual'` → ถ้า N8N ไม่ส่ง reason มา จะใช้ค่า `'manual'`
+> - `body.triggered_by || 'unknown'` → ถ้าไม่รู้ต้นทาง จะแสดง `'unknown'`
+
+---
+
+```js
+node.status({ fill: 'green', shape: 'dot', text: body.reason || 'command received' });
+return [mqttMsg, resMsg];
+```
+> **`node.status(...)`** → แสดง indicator สีเขียวใต้ node ใน canvas พร้อมข้อความ reason
+> (เช่น "temp_high", "water_dry") เพื่อ debug ได้โดยไม่ต้องเปิด Debug panel
+>
+> **`return [mqttMsg, resMsg]`** → node นี้มี **2 outputs**:
+> - Output 1 = `mqttMsg` → ไปที่ **MQTT Out** node → ส่งคำสั่งให้ ESP32
+> - Output 2 = `resMsg` → ไปที่ **HTTP Response** node → ส่ง 200 OK กลับ N8N
+
+---
+
+### ภาพรวม Data Flow ของ Function Node
+
+```
+N8N HTTP POST
+      │
+      ▼
+[msg.payload = body]
+      │
+      ▼  ┌─ body ว่าง?
+[Validate]─┤─ command ผิด?  → Output 2: HTTP 400 │ Output 1: null (ไม่ publish)
+           └─ ไม่มี relays?
+      │
+      │ (ผ่านทุกเงื่อนไข)
+      ▼
+[Build mqttMsg]  → relay ที่ไม่ได้ส่งมา default = false
+      │
+      ▼
+[Build resMsg]   → ยืนยัน relays จริงที่จะส่ง + timestamp
+      │
+      ▼
+[node.status]    → แสดง indicator บน canvas
+      │
+      ▼
+return [mqttMsg, resMsg]
+   │            │
+   ▼            ▼
+MQTT Out    HTTP Response
+(→ ESP32)   (→ N8N 200 OK)
+```
+
 **Request body ที่ N8N ส่งมา:**
 ```json
 {
