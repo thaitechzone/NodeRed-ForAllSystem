@@ -2,7 +2,7 @@
 
 > **โปรเจกต์:** SmartFarm — Node-RED → N8N via Webhook  
 > **N8N:** Docker Desktop (localhost:5678)  
-> **Tunnel:** Ngrok  
+> **Tunnel:** Cloudflare Tunnel (cloudflared ใน Docker)  
 > **วันที่สร้าง:** 2026-04-10  
 > **ไฟล์ที่เกี่ยวข้อง:**  
 > - `flows/smartfarm-nodered-n8n.json` — Node-RED flow (อัปเดต + HTTP forward)  
@@ -59,35 +59,40 @@ ESP32                Node-RED              N8N (Docker)         Actions
 |--------|-------|
 | Node-RED รันอยู่ใน Docker | ✅ |
 | N8N รันอยู่ใน Docker Desktop | ✅ |
-| Ngrok tunnel เปิดอยู่ชี้ไปที่ N8N port | ✅ |
+| Cloudflare Tunnel (cloudflared) รันใน Docker | ✅ |
 | ESP32 ส่ง MQTT ทำงานได้ | ✅ |
 
-**ตรวจสอบ N8N port ใน Docker:**
+**ตรวจสอบ services ทั้งหมด:**
 ```bash
-docker ps | grep n8n
+docker compose ps
 ```
-ปกติ N8N ใช้ port **5678** → Ngrok จะ tunnel port นี้
+ควรเห็น `cloudflared` สถานะ `running` พร้อมกับ n8n และ nodered
 
 ---
 
-## 3. ขั้นตอนที่ 1 — ตรวจสอบ Ngrok URL
+## 3. ขั้นตอนที่ 1 — ตรวจสอบ Cloudflare Tunnel URL
 
-### 3.1 หา Ngrok URL ปัจจุบัน
+### 3.1 ตรวจสอบ Tunnel ทำงาน
 
-เปิดเบราว์เซอร์ไปที่ Ngrok Dashboard:
-```
-http://localhost:4040
-```
-
-หรือดูที่ terminal ที่รัน Ngrok จะเห็น:
-```
-Forwarding   https://xxxx-xx-xx-xx-xx.ngrok-free.app → http://localhost:5678
+```bash
+docker logs cloudflared
 ```
 
-**บันทึก URL นี้ไว้** รูปแบบ: `https://xxxx-xx-xx-xx-xx.ngrok-free.app`
+ควรเห็น:
+```
+Connection established connIndex=0 ...
+```
 
-> **สำคัญ:** Ngrok Free Plan จะเปลี่ยน URL ทุกครั้งที่ restart  
-> หากใช้งานจริงควัรสมัคร Ngrok Static Domain (ฟรี 1 domain)
+หรือเปิด Zero Trust Dashboard → **Networks → Tunnels** → สถานะ **Healthy**
+
+### 3.2 URL ของ Tunnel
+
+URL คงที่ตามที่กำหนด Public Hostname ใน Zero Trust:
+```
+https://n8n.thaitechsync.com
+```
+
+> **ข้อดีเหนือ Ngrok:** URL ไม่เปลี่ยนแม้จะ restart Docker — ไม่ต้องอัปเดต Node-RED ซ้ำ
 
 ---
 
@@ -328,19 +333,19 @@ Node-RED จะแสดง response นี้ใน Debug node ชื่อ **"
 
 **Full URL (Production):**
 ```
-https://YOUR-NGROK-URL.ngrok-free.app/webhook/smartfarm-telemetry
-https://YOUR-NGROK-URL.ngrok-free.app/webhook/smartfarm-status
+https://n8n.thaitechsync.com/webhook/smartfarm-telemetry
+https://n8n.thaitechsync.com/webhook/smartfarm-status
 ```
 
 **Test ด้วย curl:**
 ```bash
-curl -X POST https://YOUR-NGROK-URL.ngrok-free.app/webhook/smartfarm-telemetry \
+curl -X POST https://n8n.thaitechsync.com/webhook/smartfarm-telemetry \
   -H "Content-Type: application/json" \
   -d '{"board_id":"ESP32-FARM-001-NATTAPHOL-PALM","timestamp":99648422,"rssi":-56,"sensors":{"water_temp":26.4,"air_temp":30.1,"air_humidity":70.8,"water_overflow":false,"water_dry":false},"relays":{"relay1_pump":true,"relay2_fan":true,"relay3_heater":true}}'
 ```
 
 ```bash
-curl -X POST https://YOUR-NGROK-URL.ngrok-free.app/webhook/smartfarm-status \
+curl -X POST https://n8n.thaitechsync.com/webhook/smartfarm-status \
   -H "Content-Type: application/json" \
   -d '{"board_id":"ESP32-FARM-001-NATTAPHOL-PALM","status":"online","ip":"192.168.1.7","firmware":"1.0.0","uptime":99739,"timestamp":99739959}'
 ```
@@ -458,14 +463,14 @@ curl -X POST https://YOUR-NGROK-URL.ngrok-free.app/webhook/smartfarm-telemetry \
 ### ปัญหา: Node-RED ส่ง HTTP แล้ว Error / Timeout
 
 **สาเหตุ:**
-- Ngrok URL เปลี่ยน (restart Ngrok)
+- Cloudflare Tunnel ยังไม่ start หรือ unhealthy
 - N8N Workflow ยัง Inactive
-- URL พิมพ์ผิด
+- URL พิมพ์ผิดใน Node-RED
 
 **วิธีแก้:**
-1. ตรวจ Ngrok URL ที่ `http://localhost:4040`
-2. อัปเดต URL ใน HTTP Request nodes ทั้ง 2 ตัวใน Node-RED
-3. ตรวจสอบ N8N Toggle เป็น **Active**
+1. ตรวจสอบ tunnel: `docker logs cloudflared` — ต้องเห็น `Connection established`
+2. ตรวจสอบ N8N Toggle เป็น **Active**
+3. URL ใน Node-RED HTTP Request nodes ต้องตรงกับ `CF_TUNNEL_URL` ใน `.env`
 
 ---
 
@@ -477,19 +482,6 @@ curl -X POST https://YOUR-NGROK-URL.ngrok-free.app/webhook/smartfarm-telemetry \
 **วิธีแก้:**
 - ตรวจสอบใน Extract node ว่าใช้ `$json.body.sensors.water_temp` ไม่ใช่ `$json.sensors.water_temp`
 - ดู raw data ใน execution ของ Webhook node ว่า body อยู่ที่ไหน
-
----
-
-### ปัญหา: Ngrok แสดง Warning "Visitor Passthrough"
-
-**สาเหตุ:**
-- Ngrok Free Plan แสดงหน้า interstitial สำหรับ browser request
-
-**วิธีแก้:**
-- เพิ่ม Header ใน HTTP Request node ของ Node-RED:
-  ```
-  ngrok-skip-browser-warning: true
-  ```
 
 ---
 

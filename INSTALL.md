@@ -59,9 +59,9 @@ d:\NodeRed\
 # Timezone
 TZ=Asia/Bangkok
 
-# ngrok URL — ใส่หลัง setup ngrok แล้ว (ดูขั้นตอนที่ 8)
-# สำคัญ: ต้องไม่มี space หน้า URL
-NGROK_URL=https://your-domain.ngrok-free.app
+# Cloudflare Tunnel — ใส่หลัง setup tunnel แล้ว (ดูขั้นตอนที่ 8)
+CLOUDFLARE_TUNNEL_TOKEN=YOUR_TUNNEL_TOKEN_HERE
+CF_TUNNEL_URL=https://YOUR-CF-TUNNEL-URL
 
 # Key สำหรับเข้ารหัส credentials ใน N8N (ต้องเปลี่ยน — random string 32+ ตัว)
 N8N_ENCRYPTION_KEY=MySecretKey1234567890AbCdEfGhIj
@@ -165,10 +165,10 @@ n8n:
 
 | ตัวแปร | ต้องเป็น | เหตุผล |
 |--------|---------|--------|
-| `N8N_HOST` | `0.0.0.0` | ถ้าเป็น `localhost` ngrok เข้าไม่ได้ |
-| `N8N_PROTOCOL` | `https` | ต้องตรงกับ ngrok URL |
-| `WEBHOOK_URL` | ngrok URL | N8N สร้าง OAuth callback URL จากนี้ |
-| `N8N_EDITOR_BASE_URL` | ngrok URL | ถ้าไม่มี OAuth callback จะกลับไป localhost |
+| `N8N_HOST` | `0.0.0.0` | ถ้าเป็น `localhost` tunnel เข้าไม่ได้ |
+| `N8N_PROTOCOL` | `https` | ต้องตรงกับ Cloudflare Tunnel URL (HTTPS) |
+| `WEBHOOK_URL` | CF Tunnel URL | N8N สร้าง OAuth callback URL จากนี้ |
+| `N8N_EDITOR_BASE_URL` | CF Tunnel URL | ถ้าไม่มี OAuth callback จะกลับไป localhost |
 
 ---
 
@@ -231,48 +231,78 @@ docker exec nodered ls /data/node_modules | findstr opcua
 
 ---
 
-## ขั้นตอนที่ 8 — Setup ngrok สำหรับ OAuth2
+## ขั้นตอนที่ 8 — Setup Cloudflare Tunnel สำหรับ OAuth2
 
 > ข้ามขั้นตอนนี้ถ้ายังไม่ต้องการ Gmail / Google Drive
 
-### ติดตั้งและตั้งค่า
+Cloudflare Tunnel รันใน Docker ร่วมกับ N8N — **ไม่ต้องเปิด terminal แยก** และ **URL ไม่เปลี่ยนเมื่อ restart**
 
-```bash
-# ติดตั้ง
-winget install ngrok.ngrok
+### 8.1 สร้าง Cloudflare Account
 
-# สมัครบัญชีที่ https://dashboard.ngrok.com/signup
-# แล้วนำ Authtoken มาใส่
-ngrok config add-authtoken YOUR_TOKEN_HERE
-```
+สมัครบัญชีฟรีที่ [dash.cloudflare.com/sign-up](https://dash.cloudflare.com/sign-up)
 
-### สร้าง Static Domain (ฟรี 1 domain)
+### 8.2 เพิ่ม Domain ใน Cloudflare
 
-1. ไปที่ [dashboard.ngrok.com](https://dashboard.ngrok.com) → **Cloud Edge** → **Domains** → **New Domain**
-2. จะได้ domain เช่น `your-name-abc.ngrok-free.app`
+> ต้องมี domain ที่ใช้ Cloudflare เป็น nameserver เช่น domain จาก Cloudflare Registrar, Namecheap, หรืออื่น ๆ ที่เปลี่ยน NS มาชี้ Cloudflare
 
-ข้อดีของ Static Domain: URL ไม่เปลี่ยนทุกครั้งที่ restart — ไม่ต้องอัปเดต Google Console ซ้ำ
+1. ไปที่ [dash.cloudflare.com](https://dash.cloudflare.com) → **Add a domain**
+2. ทำตามขั้นตอน — อัปเดต nameserver ที่ registrar ให้ชี้มา Cloudflare
 
-### รัน ngrok Tunnel
+### 8.3 สร้าง Tunnel
 
-```bash
-# รัน (แทน your-domain ด้วย domain ที่ได้)
-ngrok http --domain=your-domain.ngrok-free.app 5678
-```
+1. ไปที่ **Zero Trust** (เมนูซ้าย) → [one.dash.cloudflare.com](https://one.dash.cloudflare.com)
+2. **Networks** → **Tunnels** → **Create a tunnel**
+3. เลือก **Cloudflared** → ตั้งชื่อ tunnel เช่น `n8n-smartfarm` → **Save tunnel**
+4. หน้า **Install connector** จะแสดง token — **คัดลอก token ทั้งหมด**
 
-**ngrok รันบน Windows host โดยตรง** — ไม่ได้อยู่ใน Docker ดังนั้น `docker compose restart` ไม่กระทบ ngrok
+### 8.4 กำหนด Public Hostname
 
-### อัปเดต .env
+ยังอยู่ในหน้า Create Tunnel → แท็บ **Public Hostname**:
+
+| Field | ค่า |
+|-------|-----|
+| Subdomain | `n8n` |
+| Domain | `thaitechsync.com` (domain ที่เพิ่มไว้) |
+| Service Type | `HTTP` |
+| URL | `n8n:5678` |
+
+> `n8n:5678` คือ Docker service name ภายใน network — cloudflared เข้าถึงได้โดยตรง
+
+คลิก **Save tunnel** → tunnel URL จะเป็น `https://n8n.thaitechsync.com`
+
+### 8.5 อัปเดต .env
 
 ```env
-NGROK_URL=https://your-domain.ngrok-free.app
+CLOUDFLARE_TUNNEL_TOKEN=eyJhIjoixxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx...
+CF_TUNNEL_URL=https://n8n.thaitechsync.com
 ```
 
-### Restart N8N เพื่อโหลด URL ใหม่
+### 8.6 Start Cloudflared พร้อม Stack
+
+```bash
+docker compose up -d
+```
+
+Cloudflared จะ start อัตโนมัติพร้อมกับ N8N ทุกครั้ง
+
+### 8.7 Restart N8N เพื่อโหลด URL ใหม่
 
 ```bash
 docker compose up -d --force-recreate n8n
 ```
+
+### 8.8 ตรวจสอบ Tunnel ทำงาน
+
+```bash
+docker logs cloudflared
+```
+
+ควรเห็น:
+```
+Connection established connIndex=0 ...
+```
+
+หรือเปิด Zero Trust Dashboard → Tunnels → สถานะ tunnel เป็น **Healthy**
 
 ---
 
@@ -293,15 +323,15 @@ docker compose up -d --force-recreate n8n
 2. Application type: **Web application**
 3. Authorized redirect URIs → Add:
    ```
-   https://your-domain.ngrok-free.app/rest/oauth2-credential/callback
+   https://n8n.thaitechsync.com/rest/oauth2-credential/callback
    ```
 4. Save → Download JSON → เก็บ `Client ID` และ `Client Secret`
 
 ### 9.3 เพิ่ม Credentials ใน N8N
 
-> **สำคัญ:** ต้องเปิด N8N ผ่าน ngrok URL เท่านั้น ไม่ใช่ localhost
+> **สำคัญ:** ต้องเปิด N8N ผ่าน Cloudflare Tunnel URL เท่านั้น ไม่ใช่ localhost
 
-1. เปิด `https://your-domain.ngrok-free.app`
+1. เปิด `https://n8n.thaitechsync.com`
 2. Settings → Credentials → Add Credential
 3. สำหรับ Gmail: เลือก **Gmail OAuth2 API** → ใส่ Client ID + Secret → **Connect**
 4. สำหรับ Drive: เลือก **Google Drive OAuth2 API** → ใส่ Client ID + Secret → **Connect**
@@ -329,21 +359,21 @@ docker exec mosquitto mosquitto_pub -t "plc/data/temperature" -m "{\"value\":75.
 
 ---
 
-## การจัดการ ngrok URL เมื่อเปลี่ยน (Free plan ที่ไม่ใช้ Static Domain)
+## การจัดการ Cloudflare Tunnel
 
 | สถานการณ์ | ต้องทำอะไร |
 |-----------|-----------|
-| `docker compose restart n8n` | ไม่ต้องทำอะไรกับ ngrok ✅ |
-| ngrok ยังรันอยู่, URL เดิม | ไม่ต้องทำอะไร ✅ |
-| ngrok เปิดใหม่ (URL เปลี่ยน) | อัปเดต .env → restart n8n → อัปเดต Google Console ⚠️ |
+| `docker compose restart n8n` | ไม่ต้องทำอะไร — URL คงที่ ✅ |
+| `docker compose restart cloudflared` | ไม่ต้องทำอะไร — reconnect อัตโนมัติ ✅ |
+| เปลี่ยน domain / subdomain | อัปเดต `CF_TUNNEL_URL` → restart n8n → อัปเดต Google Console ⚠️ |
+| Token หมดอายุ / revoke | สร้าง token ใหม่ใน Zero Trust → อัปเดต `CLOUDFLARE_TUNNEL_TOKEN` → restart cloudflared ⚠️ |
 
-ถ้า URL เปลี่ยน ให้ทำตามลำดับ:
+ถ้าต้องเปลี่ยน domain:
 ```bash
-# 1. เปิด ngrok ใหม่ — ดู URL จาก terminal
-ngrok http 5678
+# 1. อัปเดต Zero Trust Dashboard → Tunnels → Public Hostname
 
 # 2. แก้ไข .env
-#    NGROK_URL=https://xyz789.ngrok-free.app
+#    CF_TUNNEL_URL=https://n8n-new.thaitechsync.com
 
 # 3. Restart N8N
 docker compose up -d --force-recreate n8n
@@ -398,8 +428,10 @@ docker stats
 - [ ] ตั้งค่า MQTT Credential ใน N8N (host: `mosquitto`, port: `1883`)
 
 ### Setup OAuth2 (Google Services)
-- [ ] ติดตั้ง ngrok + สร้าง Static Domain
-- [ ] แก้ไข `.env` ใส่ `NGROK_URL` (ไม่มี space)
+- [ ] สร้าง Cloudflare account + เพิ่ม domain
+- [ ] สร้าง tunnel ใน Zero Trust → คัดลอก token
+- [ ] กำหนด Public Hostname: `n8n.thaitechsync.com` → `n8n:5678`
+- [ ] แก้ไข `.env` ใส่ `CLOUDFLARE_TUNNEL_TOKEN` และ `CF_TUNNEL_URL`
 - [ ] `docker compose up -d --force-recreate n8n`
 - [ ] Google Cloud: Enable Gmail API + Drive API + Generative Language API
 - [ ] Google Cloud: สร้าง OAuth2 Client ID + ใส่ redirect URI
@@ -418,9 +450,11 @@ docker stats
 
 | ปัญหา | วิธีแก้ |
 |-------|---------|
-| OAuth2 callback ล้มเหลว | เปิด N8N ผ่าน ngrok URL ไม่ใช่ localhost |
+| OAuth2 callback ล้มเหลว | เปิด N8N ผ่าน Cloudflare Tunnel URL ไม่ใช่ localhost |
 | N8N เชื่อม MQTT ไม่ได้ | ใช้ hostname `mosquitto` ไม่ใช่ `localhost` |
-| NGROK_URL มี space นำหน้า | แก้ `.env`: `NGROK_URL=https://...` (ลบ space) |
+| CF_TUNNEL_URL มี space นำหน้า | แก้ `.env`: `CF_TUNNEL_URL=https://...` (ลบ space) |
+| cloudflared logs แสดง `failed to connect` | ตรวจสอบ `CLOUDFLARE_TUNNEL_TOKEN` ใน `.env` ถูกต้อง |
+| Tunnel สถานะ `Degraded` ใน Dashboard | `docker restart cloudflared` — reconnect อัตโนมัติ |
 | `mosquitto unhealthy` | `docker logs mosquitto` — มักเป็น mosquitto.conf ผิด |
 | Node-RED ไม่โหลด OPC node | `docker restart nodered` แล้วรอ 30 วิ |
 | Port 1883 ถูกใช้งาน | `netstat -ano \| findstr :1883` หา PID แล้ว `taskkill /PID xxx /F` |

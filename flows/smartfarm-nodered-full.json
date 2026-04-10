@@ -85,7 +85,7 @@
         "method": "POST",
         "ret": "obj",
         "paytoqs": "ignore",
-        "url": "https://YOUR-NGROK-URL.ngrok-free.app/webhook/smartfarm-telemetry",
+        "url": "https://n8n.thaitechsync.com/webhook/smartfarm-telemetry",
         "tls": "",
         "persist": false,
         "proxy": "",
@@ -98,12 +98,6 @@
                 "keyValue": "Content-Type",
                 "valueType": "other",
                 "valueValue": "application/json"
-            },
-            {
-                "keyType": "other",
-                "keyValue": "ngrok-skip-browser-warning",
-                "valueType": "other",
-                "valueValue": "true"
             }
         ],
         "x": 440,
@@ -169,7 +163,7 @@
         "method": "POST",
         "ret": "obj",
         "paytoqs": "ignore",
-        "url": "https://YOUR-NGROK-URL.ngrok-free.app/webhook/smartfarm-status",
+        "url": "https://n8n.thaitechsync.com/webhook/smartfarm-status",
         "tls": "",
         "persist": false,
         "proxy": "",
@@ -182,12 +176,6 @@
                 "keyValue": "Content-Type",
                 "valueType": "other",
                 "valueValue": "application/json"
-            },
-            {
-                "keyType": "other",
-                "keyValue": "ngrok-skip-browser-warning",
-                "valueType": "other",
-                "valueValue": "true"
             }
         ],
         "x": 430,
