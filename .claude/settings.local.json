@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(docker restart:*)"
+      "Bash(docker restart:*)",
+      "Bash(ls d:/NodeRed/*.md)"
     ]
   }
 }

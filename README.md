@@ -47,7 +47,8 @@ https://n8n.thaitechsync.com
 
 | ไฟล์ | เนื้อหา |
 |------|---------|
-| [SETUP.md](SETUP.md) | **คู่มือตั้งค่าครบสมบูรณ์ — เริ่มต้นที่นี่** |
+| [SETUP.md](SETUP.md) | **คู่มือตั้งค่าบนเครื่องบ้าน (Windows + Docker Desktop)** |
+| [VPS_SETUP.md](VPS_SETUP.md) | **คู่มือติดตั้งบน VPS Contabo ผ่าน PuTTY** |
 | [INSTALL.md](INSTALL.md) | ติดตั้ง Docker + OAuth2 (Google Services) |
 | [N8NAutomation.md](N8NAutomation.md) | N8N Webhook + Auto Relay Control |
 | [ESP32MQTTTester.md](ESP32MQTTTester.md) | ทดสอบ MQTT กับ ESP32 |

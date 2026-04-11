@@ -11,7 +11,7 @@
 2. [สิ่งที่ต้องเตรียม](#2-สิ่งที่ต้องเตรียม)
 3. [โครงสร้างไฟล์](#3-โครงสร้างไฟล์)
 4. [ขั้นตอนที่ 1 — ติดตั้ง Docker Desktop](#4-ขั้นตอนที่-1--ติดตั้ง-docker-desktop)
-5. [ขั้นตอนที่ 2 — ตั้งค่า Cloudflare Tunnel](#5-ขั้นตอนที่-2--ตั้งค่า-cloudflare-tunnel)
+5. [ขั้นตอนที่ 2 — ตั้งค่า Cloudflare Tunnel](#5-ขั้นตอนที่-2--ตั้งค่า-cloudflare-tunnel) *(สร้าง Tunnel + config docker-compose)*
 6. [ขั้นตอนที่ 3 — ตั้งค่าไฟล์ .env](#6-ขั้นตอนที่-3--ตั้งค่าไฟล์-env)
 7. [ขั้นตอนที่ 4 — Start Docker Stack](#7-ขั้นตอนที่-4--start-docker-stack)
 8. [ขั้นตอนที่ 5 — ตั้งค่า Public Hostname](#8-ขั้นตอนที่-5--ตั้งค่า-public-hostname)
@@ -149,6 +149,30 @@ Cloudflare Tunnel ทำให้ N8N เข้าถึงได้จากอ
 3. **คัดลอกเฉพาะ string หลัง `--token`** (ขึ้นต้นด้วย `eyJ` ยาว ~190+ ตัวอักษร)
 
 > **หมายเหตุ:** Token ที่ถูกต้องขึ้นต้นด้วย `eyJ` เท่านั้น — ไม่ใช่ `cfk_` หรือ UUID สั้น ๆ
+
+### 5.4 cloudflared ใน docker-compose.yml
+
+Token ที่คัดลอกมาจะถูกใช้ใน service `cloudflared` ใน `docker-compose.yml` ดังนี้:
+
+```yaml
+cloudflared:
+  image: cloudflare/cloudflared:latest
+  container_name: cloudflared
+  command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+  restart: unless-stopped
+  depends_on:
+    n8n:
+      condition: service_healthy
+  networks:
+    - iot_network
+```
+
+**ไม่ต้องแก้ไข block นี้** — แค่ใส่ token ใน `.env` แล้ว `docker compose up -d` ก็พร้อมใช้งาน
+
+> **สรุปการทำงาน:**  
+> cloudflared อ่าน `CLOUDFLARE_TUNNEL_TOKEN` จาก `.env` → เปิด tunnel ออกไปหา Cloudflare  
+> → Cloudflare รับ request จาก `n8n.thaitechsync.com` / `nodered.thaitechsync.com`  
+> → ส่งกลับมาตาม tunnel → cloudflared forward ไปที่ `n8n:5678` / `nodered:1880` ใน Docker network
 
 ---
 

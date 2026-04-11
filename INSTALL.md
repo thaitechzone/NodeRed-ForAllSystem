@@ -77,7 +77,7 @@ OPC_SERVER_PORT=4840
 
 ## ขั้นตอนที่ 4 — ทำความเข้าใจ docker-compose.yml
 
-ไฟล์ `docker-compose.yml` กำหนด 3 services และทำงานร่วมกัน:
+ไฟล์ `docker-compose.yml` กำหนด 4 services และทำงานร่วมกัน:
 
 ### Service 1: mosquitto
 
@@ -169,6 +169,35 @@ n8n:
 | `N8N_PROTOCOL` | `https` | ต้องตรงกับ Cloudflare Tunnel URL (HTTPS) |
 | `WEBHOOK_URL` | CF Tunnel URL | N8N สร้าง OAuth callback URL จากนี้ |
 | `N8N_EDITOR_BASE_URL` | CF Tunnel URL | ถ้าไม่มี OAuth callback จะกลับไป localhost |
+
+### Service 4: cloudflared
+
+```yaml
+cloudflared:
+  image: cloudflare/cloudflared:latest
+  container_name: cloudflared
+  command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+  restart: unless-stopped
+  depends_on:
+    n8n:
+      condition: service_healthy
+  networks:
+    - iot_network
+```
+
+**หน้าที่:** เปิด Tunnel ออกไปหา Cloudflare Network — รับ HTTPS request จากอินเทอร์เน็ตแล้วส่งต่อมาให้ services ใน Docker ผ่าน HTTP ภายใน
+
+| ส่วน | คำอธิบาย |
+|------|----------|
+| `command: tunnel --no-autoupdate run --token` | รัน tunnel โดยใช้ token จาก `.env` แทนการใช้ config file |
+| `--no-autoupdate` | ปิด auto-update ภายใน container (Docker จัดการ image เอง) |
+| `${CLOUDFLARE_TUNNEL_TOKEN}` | ดึง token จาก `.env` — ต้องขึ้นต้นด้วย `eyJ` |
+| `depends_on: n8n: condition: service_healthy` | รอให้ N8N พร้อมก่อน — ป้องกัน tunnel รับ request ก่อน N8N start |
+| `networks: iot_network` | อยู่ใน network เดียวกับ n8n และ nodered — resolve ชื่อ `n8n:5678`, `nodered:1880` ได้ตรง |
+
+> **ทำไม `--token` อยู่ใน `command:` ไม่ใช่ `environment:`**  
+> cloudflared รุ่นล่าสุดรับ token ผ่าน argument ได้เสถียรกว่า env var `TUNNEL_TOKEN`  
+> ทั้งสองวิธีใช้ได้ แต่ `command:` มีปัญหาน้อยกว่าในทางปฏิบัติ
 
 ---
 
