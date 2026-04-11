@@ -172,11 +172,22 @@ systemctl start docker
 ### วิธี A — ใช้ Git (แนะนำ ถ้าโปรเจกต์อยู่บน GitHub)
 
 ```bash
-# บน VPS
+# บน VPS — clone เฉพาะ branch ที่ต้องการ
 cd /opt
-git clone https://github.com/YOUR_USERNAME/YOUR_REPO.git smartfarm
+git clone -b 02_cloudflare_Connect https://github.com/YOUR_USERNAME/YOUR_REPO.git smartfarm
 cd smartfarm
 ```
+
+> **ถ้า clone ไปแล้ว** แล้วค่อย checkout branch:
+> ```bash
+> git checkout 02_cloudflare_Connect
+> ```
+>
+> ตรวจสอบว่า checkout ถูก branch:
+> ```bash
+> git branch
+> # ควรเห็น * 02_cloudflare_Connect
+> ```
 
 ---
 
