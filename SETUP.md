@@ -289,14 +289,29 @@ https://n8n.thaitechsync.com
 
 ## 10. ขั้นตอนที่ 7 — ตั้งค่า Node-RED
 
-### 10.1 Import Flow
+### 10.1 Login Node-RED
 
-1. เปิด [http://localhost:1880](http://localhost:1880)
+เปิด [http://localhost:1880](http://localhost:1880) จะเห็นหน้า Login:
+
+| Field | ค่า |
+|-------|-----|
+| Username | `admin` |
+| Password | `admin1234` |
+
+> **เปลี่ยน password:** แก้ไขไฟล์ `nodered/settings.js` — ต้อง generate bcrypt hash ใหม่ก่อน  
+> ```bash
+> docker exec nodered node -e "const bcrypt = require('bcryptjs'); bcrypt.hash('NEW_PASSWORD', 8, (e,h) => console.log(h));"
+> ```  
+> นำ hash ที่ได้ไปแทนค่า `password` ใน `adminAuth` แล้ว `docker restart nodered`
+
+### 10.2 Import Flow
+
+1. เข้า [http://localhost:1880](http://localhost:1880) → Login
 2. เมนู **☰** → **Import**
 3. เลือกไฟล์: `flows/smartfarm-nodered-full.json`
 4. Import → **Deploy** (ปุ่มแดงมุมบนขวา)
 
-### 10.2 Flow ที่ Import มีอะไรบ้าง
+### 10.3 Flow ที่ Import มีอะไรบ้าง
 
 ```
 Section 1: SUBSCRIBE (รับจาก ESP32)
@@ -314,7 +329,7 @@ Section 3: PUBLISH Manual (ปุ่มทดสอบ)
     → [PUB: Control → ESP32]
 ```
 
-### 10.3 HTTP Request URLs (ตั้งไว้แล้ว)
+### 10.4 HTTP Request URLs (ตั้งไว้แล้ว)
 
 Flow ใช้ URLs เหล่านี้ส่งข้อมูลไป N8N:
 - `https://n8n.thaitechsync.com/webhook/smartfarm-telemetry`
@@ -425,6 +440,8 @@ docker run --rm -v nodered_n8n_data:/n8ndata --entrypoint="" alpine \
 | N8N เข้าไม่ได้ผ่าน tunnel | Public hostname ยังไม่ตั้ง | Zero Trust → Tunnels → Edit → Public Hostname → เพิ่ม `n8n.thaitechsync.com → n8n:5678` |
 | N8N OAuth2 callback ล้มเหลว | เปิดผ่าน localhost | ใช้ `https://n8n.thaitechsync.com` เสมอ |
 | N8N เชื่อม MQTT ไม่ได้ | ใช้ hostname ผิด | ใช้ `mosquitto` ไม่ใช่ `localhost` |
+| Node-RED แสดงหน้า Login | ปกติ — Auth เปิดอยู่ | Login: `admin` / `admin1234` |
+| Node-RED Login ผิดพลาด | Password ไม่ตรง | ดู `nodered/settings.js` — ต้อง generate bcrypt hash ใหม่ |
 | `mosquitto unhealthy` | mosquitto.conf ผิด | `docker logs mosquitto` ตรวจสอบ error |
 | Port 1883 ถูกใช้อยู่ | Process อื่นใช้ port | `netstat -ano \| findstr :1883` → `taskkill /PID xxx /F` |
 
@@ -451,6 +468,7 @@ Telemetry เข้า N8N
 | รายการ | ค่า |
 |--------|-----|
 | Node-RED UI | http://localhost:1880 |
+| Node-RED Login | admin / admin1234 |
 | N8N UI (local) | http://localhost:5678 |
 | N8N UI (public) | https://n8n.thaitechsync.com |
 | MQTT Broker (local) | localhost:1883 |

@@ -113,7 +113,7 @@ nodered:
     - "1880:1880"   # Web UI ของ Node-RED
   volumes:
     - nodered_data:/data                         # flows, credentials, node modules
-    - ./nodered/settings.js:/data/settings.js:ro # config ของ Node-RED (read-only)
+    - ./nodered/settings.js:/data/settings.js:ro # config + adminAuth ของ Node-RED (read-only)
   environment:
     - TZ=${TZ}                       # Timezone จาก .env
     - OPC_SERVER_IP=${OPC_SERVER_IP}   # IP ของ OPC Server จาก .env
@@ -424,6 +424,7 @@ docker stats
 - [ ] ติดตั้ง Docker Desktop + WSL2
 - [ ] แก้ไข `.env` — ใส่ `OPC_SERVER_IP`, `N8N_ENCRYPTION_KEY`
 - [ ] `docker compose up -d`
+- [ ] เข้า Node-RED [http://localhost:1880](http://localhost:1880) — Login: `admin` / `admin1234`
 - [ ] ติดตั้ง `node-red-contrib-opcua` ใน Node-RED
 - [ ] ตั้งค่า MQTT Credential ใน N8N (host: `mosquitto`, port: `1883`)
 
@@ -450,6 +451,8 @@ docker stats
 
 | ปัญหา | วิธีแก้ |
 |-------|---------|
+| Node-RED แสดงหน้า Login | ปกติ — Login: `admin` / `admin1234` |
+| Node-RED Login ผิดพลาด | แก้ `nodered/settings.js` → generate bcrypt hash ใหม่ → `docker restart nodered` |
 | OAuth2 callback ล้มเหลว | เปิด N8N ผ่าน Cloudflare Tunnel URL ไม่ใช่ localhost |
 | N8N เชื่อม MQTT ไม่ได้ | ใช้ hostname `mosquitto` ไม่ใช่ `localhost` |
 | CF_TUNNEL_URL มี space นำหน้า | แก้ `.env`: `CF_TUNNEL_URL=https://...` (ลบ space) |

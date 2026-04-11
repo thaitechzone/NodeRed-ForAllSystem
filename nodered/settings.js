@@ -3,15 +3,15 @@ module.exports = {
     uiPort: process.env.PORT || 1880,
     uiHost: "0.0.0.0",
 
-    // ─── Security (เปิด auth ถ้าต้องการ) ─────────────────────
-    // adminAuth: {
-    //     type: "credentials",
-    //     users: [{
-    //         username: "admin",
-    //         password: "$2b$08$...", // bcrypt hash
-    //         permissions: "*"
-    //     }]
-    // },
+    // ─── Security ────────────────────────────────────────────
+    adminAuth: {
+        type: "credentials",
+        users: [{
+            username: "admin",
+            password: "$2b$08$KdcHFaJtXZwpAs8NZqpPuOjIn8OokHuDLXseMuuiRAGuqk1OOvqUC",
+            permissions: "*"
+        }]
+    },
 
     // ─── Timezone ────────────────────────────────────────────
     timezone: "Asia/Bangkok",
