@@ -1,4 +1,4 @@
-# SmartFarm — คู่มือตั้งค่าระบบสมบูรณ์
+# NodeRed-ForAllSystem — คู่มือตั้งค่าระบบสมบูรณ์
 
 > **Platform:** Windows 11 Pro | **Working dir:** `d:\NodeRed`  
 > **อัปเดตล่าสุด:** 2026-04-10

@@ -1,4 +1,4 @@
-# SmartFarm — ติดตั้งบน VPS (Contabo)
+# NodeRed-ForAllSystem — ติดตั้งบน VPS (Contabo)
 
 > **เป้าหมาย:** รัน Docker Stack เดิม (Node-RED + N8N + Mosquitto + Cloudflare Tunnel) บน VPS Linux  
 > **VPS:** Contabo | **OS:** Ubuntu 22.04 LTS | **เครื่องมือ:** PuTTY (SSH), WinSCP (ถ่ายไฟล์)  
@@ -52,7 +52,7 @@
 2. กรอก **Host Name:** `123.456.789.10` (IP จาก email Contabo)
 3. **Port:** `22`
 4. **Connection type:** SSH
-5. (ไม่บังคับ) Saved Sessions → ตั้งชื่อ `contabo-smartfarm` → **Save**
+5. (ไม่บังคับ) Saved Sessions → ตั้งชื่อ `contabo-NodeRed-ForAllSystem` → **Save**
 6. คลิก **Open**
 
 ### 2.2 Login ครั้งแรก
@@ -174,8 +174,8 @@ systemctl start docker
 ```bash
 # บน VPS — clone เฉพาะ branch ที่ต้องการ
 cd /opt
-git clone -b 02_cloudflare_Connect https://github.com/YOUR_USERNAME/YOUR_REPO.git smartfarm
-cd smartfarm
+git clone -b 02_cloudflare_Connect https://github.com/YOUR_USERNAME/YOUR_REPO.git NodeRed-ForAllSystem
+cd NodeRed-ForAllSystem
 ```
 
 > **ถ้า clone ไปแล้ว** แล้วค่อย checkout branch:
@@ -204,8 +204,8 @@ cd smartfarm
    - **Password:** (password Contabo)
 3. คลิก **Login**
 4. ฝั่งขวา (VPS) นำทางไปที่ `/opt/`
-5. สร้างโฟลเดอร์ใหม่ชื่อ `smartfarm`
-6. ลากไฟล์จากเครื่อง Windows (ฝั่งซ้าย) ไปวางที่ `/opt/smartfarm/`
+5. สร้างโฟลเดอร์ใหม่ชื่อ `NodeRed-ForAllSystem`
+6. ลากไฟล์จากเครื่อง Windows (ฝั่งซ้าย) ไปวางที่ `/opt/NodeRed-ForAllSystem/`
 
 ไฟล์ที่ต้องโอน:
 ```
@@ -223,7 +223,7 @@ flows/
 ### ตรวจสอบไฟล์บน VPS
 
 ```bash
-ls -la /opt/smartfarm/
+ls -la /opt/NodeRed-ForAllSystem/
 ```
 
 ควรเห็น:
@@ -239,12 +239,50 @@ flows/
 
 ## 6. ตั้งค่าไฟล์ .env
 
+เลือกวิธีใดวิธีหนึ่ง:
+
+---
+
+### วิธี A — Copy จากเครื่อง Windows ด้วย SCP (เร็วที่สุด)
+
+**เปิด PowerShell หรือ CMD บนเครื่อง Windows แล้วรัน:**
+
+```powershell
+# รูปแบบ: scp <path ไฟล์บน Windows> <user>@<IP VPS>:<path ปลายทาง>
+scp d:\NodeRed\.env root@123.456.789.10:/opt/NodeRed-ForAllSystem/.env
+```
+
+> - ระบบจะถาม password → ใส่ root password Contabo
+> - ถ้าใช้ user อื่น เปลี่ยน `root` เป็นชื่อ user เช่น `smartfarm`
+
+ตรวจสอบว่าไฟล์ถูก copy แล้ว:
+
 ```bash
-cd /opt/smartfarm
+cat /opt/NodeRed-ForAllSystem/.env
+```
+
+---
+
+### วิธี B — Copy ผ่าน WinSCP (ลากวาง)
+
+1. เปิด WinSCP → Login เข้า VPS
+2. ฝั่งซ้าย (Windows) นำทางไปที่ `d:\NodeRed\`
+3. ฝั่งขวา (VPS) นำทางไปที่ `/opt/NodeRed-ForAllSystem/`
+4. ลากไฟล์ `.env` จากซ้ายไปวางฝั่งขวา
+5. ถ้าถามว่าจะ Overwrite → **Yes**
+
+> **หมายเหตุ:** WinSCP อาจซ่อนไฟล์ที่ขึ้นต้นด้วย `.` — กด `Ctrl+Alt+H` เพื่อแสดงไฟล์ hidden
+
+---
+
+### วิธี C — สร้างใหม่บน VPS ด้วย nano
+
+```bash
+cd /opt/NodeRed-ForAllSystem
 nano .env
 ```
 
-แก้ไขค่าให้ครบ:
+วางเนื้อหาข้างล่างนี้ แล้วแก้ค่าให้ครบ:
 
 ```env
 # ─── Timezone ────────────────────────────────────────────
@@ -264,18 +302,25 @@ OPC_SERVER_PORT=4840
 
 บันทึก: กด `Ctrl+X` → `Y` → `Enter`
 
-> **สร้าง N8N_ENCRYPTION_KEY แบบ random:**
-> ```bash
-> openssl rand -hex 16
-> ```
-> นำค่าที่ได้ไปใส่ใน `.env`
+---
+
+### สร้าง N8N_ENCRYPTION_KEY แบบ random (ถ้าสร้างใหม่)
+
+```bash
+openssl rand -hex 16
+```
+
+นำค่าที่ได้ไปใส่แทน `change-this-to-random-32-char-string` ใน `.env`
+
+> **สำคัญ:** หลัง stack รันครั้งแรกแล้ว **ห้ามเปลี่ยน** `N8N_ENCRYPTION_KEY` เด็ดขาด  
+> N8N เข้ารหัส credentials ด้วย key นี้ — เปลี่ยนแล้ว credentials ทั้งหมดจะใช้ไม่ได้
 
 ---
 
 ## 7. Start Docker Stack
 
 ```bash
-cd /opt/smartfarm
+cd /opt/NodeRed-ForAllSystem
 
 # Pull images ทั้งหมด
 docker compose pull
@@ -402,7 +447,7 @@ docker exec mosquitto mosquitto_pub \
 
 ```bash
 # ── เข้าโฟลเดอร์โปรเจกต์ ────────────────────────────────
-cd /opt/smartfarm
+cd /opt/NodeRed-ForAllSystem
 
 # ── Start / Stop ────────────────────────────────────────
 docker compose up -d                          # Start ทั้งหมด
@@ -455,7 +500,7 @@ systemctl is-enabled docker
 | `Permission denied` ตอนรัน docker | user ยังไม่อยู่ใน group docker | `usermod -aG docker $USER` แล้ว logout/login ใหม่ |
 | `cloudflared` Restarting | Token ไม่ถูกต้อง | Zero Trust → Configure → Docker → คัดลอก token ใหม่ |
 | N8N Webhook 404 | Workflow ยัง Inactive | N8N → Workflow → เปิด Active toggle |
-| `Mismatching encryption keys` | N8N_ENCRYPTION_KEY ไม่ตรง volume | อ่าน key จริง: `docker run --rm -v smartfarm_n8n_data:/d --entrypoint="" alpine sh -c "cat /d/config"` |
+| `Mismatching encryption keys` | N8N_ENCRYPTION_KEY ไม่ตรง volume | อ่าน key จริง: `docker run --rm -v NodeRed-ForAllSystem_n8n_data:/d --entrypoint="" alpine sh -c "cat /d/config"` |
 | `mosquitto unhealthy` | mosquitto.conf ผิด | `docker logs mosquitto` ตรวจสอบ error |
 | ไม่สามารถเปิด URL สาธารณะ | DNS ยังไม่ propagate | รอ 1-5 นาที, ลอง `nslookup n8n.thaitechsync.com` |
 | Disk เต็ม | Docker images/logs สะสม | `docker system prune -f` ลบ images ที่ไม่ใช้ |
@@ -468,7 +513,7 @@ systemctl is-enabled docker
 |--|----------------------|-------------|
 | Docker | Docker Desktop | Docker Engine |
 | คำสั่ง compose | `docker compose` | `docker compose` (เหมือนกัน) |
-| path โปรเจกต์ | `d:\NodeRed` | `/opt/smartfarm` |
+| path โปรเจกต์ | `d:\NodeRed` | `/opt/NodeRed-ForAllSystem` |
 | เปิดตลอด 24/7 | ต้องเปิดคอมตลอด | ทำงานอัตโนมัติ |
 | IP สาธารณะ | เปลี่ยนตามISP (dynamic) | คงที่ (static) |
 | Cloudflare Tunnel | จำเป็น (IP เปลี่ยน) | ยังใช้ได้ แต่สามารถ port-forward ตรงได้ถ้าต้องการ |
