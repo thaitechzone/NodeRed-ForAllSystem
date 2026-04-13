@@ -1,4 +1,4 @@
-# คู่มือติดตั้ง Node-RED + N8N + MQTT (Local Docker)
+# คู่มือติดตั้ง Node-RED + N8N + MQTT + ngrok (Docker)
 
 > Platform: Windows 11 Pro | Working dir: `d:\NodeRed`
 
@@ -10,8 +10,11 @@
 |--------|---------|
 | Docker Desktop สำหรับ Windows | [https://www.docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop) |
 | WSL2 | Docker Desktop จะติดตั้งให้อัตโนมัติ |
+| บัญชี ngrok (ฟรี) | [https://dashboard.ngrok.com/signup](https://dashboard.ngrok.com/signup) |
 | RAM | แนะนำ 8 GB ขึ้นไป |
 | Disk ว่าง | 5 GB ขึ้นไป |
+
+> **ไม่ต้องติดตั้ง ngrok ในเครื่อง** — ใช้ Docker image แทน
 
 ---
 
@@ -51,7 +54,28 @@ d:\NodeRed\
 
 ---
 
-## ขั้นตอนที่ 3 — แก้ไขไฟล์ .env
+## ขั้นตอนที่ 3 — ตั้งค่า ngrok
+
+### 3.1 สมัครบัญชี ngrok (ฟรี)
+
+ไปที่ [https://dashboard.ngrok.com/signup](https://dashboard.ngrok.com/signup)
+
+### 3.2 สร้าง Static Domain (ฟรี 1 domain)
+
+1. Login → **Cloud Edge** → **Domains** → **New Domain**
+2. จะได้ domain เช่น `your-name-abc.ngrok-free.dev`
+3. จด domain นี้ไว้ใช้ในขั้นตอนถัดไป
+
+> Static Domain ทำให้ URL ไม่เปลี่ยนทุกครั้งที่ restart — ไม่ต้องอัปเดต Google Console ซ้ำ
+
+### 3.3 คัดลอก Authtoken
+
+ไปที่ [https://dashboard.ngrok.com/get-started/your-authtoken](https://dashboard.ngrok.com/get-started/your-authtoken)  
+คัดลอก token ยาว (ประมาณ 48 ตัวอักษร)
+
+---
+
+## ขั้นตอนที่ 4 — แก้ไขไฟล์ .env
 
 เปิด `.env` แล้วแก้ค่าให้ตรงกับระบบ:
 
@@ -59,14 +83,26 @@ d:\NodeRed\
 # Timezone
 TZ=Asia/Bangkok
 
-# ngrok URL — ใส่หลัง setup ngrok แล้ว (ดูขั้นตอนที่ 8)
-# สำคัญ: ต้องไม่มี space หน้า URL
-NGROK_URL=https://your-domain.ngrok-free.app
+# ─── Ngrok ───────────────────────────────────────────────
+# Authtoken จาก https://dashboard.ngrok.com/get-started/your-authtoken
+NGROK_AUTHTOKEN=ใส่-authtoken-ที่-copy-มา
 
+# Static domain (ไม่ต้องมี https://)
+NGROK_DOMAIN=your-name-abc.ngrok-free.dev
+NGROK_URL=https://your-name-abc.ngrok-free.dev
+
+# ─── N8N ─────────────────────────────────────────────────
 # Key สำหรับเข้ารหัส credentials ใน N8N (ต้องเปลี่ยน — random string 32+ ตัว)
+# สร้างด้วย: node -e "console.log(require('crypto').randomBytes(16).toString('hex'))"
 N8N_ENCRYPTION_KEY=MySecretKey1234567890AbCdEfGhIj
 
-# IP ของเครื่องที่รัน OPC Server (ไม่ใช่ localhost)
+# ─── Node-RED Admin Auth ─────────────────────────────────
+# สร้าง hash ดูขั้นตอนที่ 5
+NR_ADMIN_USERNAME=admin
+NR_ADMIN_PASSWORD_HASH=$2b$08$REPLACE_THIS_WITH_REAL_HASH
+
+# ─── OPC Server ──────────────────────────────────────────
+# IP ของเครื่องที่รัน OPC Server (ไม่ใช่ localhost เพราะ Node-RED อยู่ใน Docker)
 OPC_SERVER_IP=192.168.1.100
 OPC_SERVER_PORT=4840
 ```
@@ -75,112 +111,53 @@ OPC_SERVER_PORT=4840
 
 ---
 
-## ขั้นตอนที่ 4 — ทำความเข้าใจ docker-compose.yml
+## ขั้นตอนที่ 5 — ตั้งค่า Node-RED Admin Login
 
-ไฟล์ `docker-compose.yml` กำหนด 3 services และทำงานร่วมกัน:
+### 5.1 สร้าง Password Hash
 
-### Service 1: mosquitto
+เลือกวิธีใดวิธีหนึ่ง:
 
-```yaml
-mosquitto:
-  image: eclipse-mosquitto:2
-  container_name: mosquitto
-  ports:
-    - "1883:1883"   # MQTT protocol — ใช้กับ Node-RED, N8N, MQTT clients
-    - "9001:9001"   # WebSocket — สำหรับ browser-based MQTT clients
-  volumes:
-    - ./mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
-    - mosquitto_data:/mosquitto/data   # เก็บข้อมูล persistent
-    - mosquitto_log:/mosquitto/log     # log files
-  restart: unless-stopped
-  healthcheck:
-    test: ["CMD", "mosquitto_sub", "-t", "$$SYS/#", "-C", "1", "-i", "healthcheck", "-W", "3"]
-    interval: 30s
-    timeout: 10s
-    retries: 3
+**วิธีที่ 1 — Docker (แนะนำ ไม่ต้องติดตั้งอะไรเพิ่ม)**
+```bash
+docker run --rm -it nodered/node-red node-red-admin hash-pw
 ```
 
-**Healthcheck:** Docker จะตรวจสอบว่า Mosquitto พร้อมรับ connection ก่อน start services อื่น  
-Services ที่ระบุ `depends_on: mosquitto: condition: service_healthy` จะรอจนผ่าน healthcheck
-
-### Service 2: nodered
-
-```yaml
-nodered:
-  image: nodered/node-red:latest
-  container_name: nodered
-  ports:
-    - "1880:1880"   # Web UI ของ Node-RED
-  volumes:
-    - nodered_data:/data                         # flows, credentials, node modules
-    - ./nodered/settings.js:/data/settings.js:ro # config ของ Node-RED (read-only)
-  environment:
-    - TZ=${TZ}                       # Timezone จาก .env
-    - OPC_SERVER_IP=${OPC_SERVER_IP}   # IP ของ OPC Server จาก .env
-    - OPC_SERVER_PORT=${OPC_SERVER_PORT}
-  depends_on:
-    mosquitto:
-      condition: service_healthy     # รอ Mosquitto พร้อมก่อน
+**วิธีที่ 2 — CMD / PowerShell (ต้องการ Node.js)**
+```cmd
+npx node-red-admin hash-pw
 ```
 
-**หมายเหตุ:** `OPC_SERVER_IP` และ `OPC_SERVER_PORT` ส่งเข้า container เพื่อให้ flow ใน Node-RED เรียกใช้ได้
-
-### Service 3: n8n
-
-```yaml
-n8n:
-  image: n8nio/n8n:latest
-  container_name: n8n
-  ports:
-    - "5678:5678"   # Web UI ของ N8N
-  volumes:
-    - n8n_data:/home/node/.n8n   # workflows, credentials, database
-  environment:
-    - TZ=${TZ}
-    - GENERIC_TIMEZONE=${TZ}
-
-    # Network settings
-    - N8N_HOST=0.0.0.0        # รับ connection จากทุก interface (จำเป็นสำหรับ ngrok)
-    - N8N_PORT=5678
-    - N8N_PROTOCOL=https      # ต้องตรงกับ ngrok ที่เป็น HTTPS
-
-    # URL settings — ทั้งสองต้องตั้งพร้อมกันเสมอ
-    - WEBHOOK_URL=${NGROK_URL}/         # N8N ใช้สร้าง webhook endpoint URLs
-    - N8N_EDITOR_BASE_URL=${NGROK_URL}/ # N8N ใช้สร้าง OAuth2 callback URL
-
-    # Security
-    - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}  # เข้ารหัส credentials ที่เก็บใน volume
-
-    # Performance
-    - N8N_METRICS=false              # ปิด metrics endpoint
-    - EXECUTIONS_DATA_PRUNE=true     # ลบ execution logs อัตโนมัติ
-    - EXECUTIONS_DATA_MAX_AGE=168    # เก็บ logs ไว้ 168 ชั่วโมง (7 วัน)
-
-  depends_on:
-    mosquitto:
-      condition: service_healthy
+**วิธีที่ 3 — Docker (หลัง compose up แล้ว)**
+```bash
+docker exec -it nodered node-red-admin hash-pw
 ```
 
-**ตัวแปรที่สำคัญที่สุดสำหรับ OAuth2:**
+ทุกวิธีจะถาม: `Password:` → พิมพ์ password แล้วกด Enter  
+ได้ผลลัพธ์เช่น:
+```
+$2b$08$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ01234
+```
 
-| ตัวแปร | ต้องเป็น | เหตุผล |
-|--------|---------|--------|
-| `N8N_HOST` | `0.0.0.0` | ถ้าเป็น `localhost` ngrok เข้าไม่ได้ |
-| `N8N_PROTOCOL` | `https` | ต้องตรงกับ ngrok URL |
-| `WEBHOOK_URL` | ngrok URL | N8N สร้าง OAuth callback URL จากนี้ |
-| `N8N_EDITOR_BASE_URL` | ngrok URL | ถ้าไม่มี OAuth callback จะกลับไป localhost |
+### 5.2 ใส่ Hash ลงใน .env
+
+```env
+NR_ADMIN_USERNAME=admin
+NR_ADMIN_PASSWORD_HASH=$2b$08$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ01234
+```
+
+> hash ขึ้นต้นด้วย `$2b$` เสมอ — ถ้าไม่ใช่แสดงว่า copy ไม่ครบ
 
 ---
 
-## ขั้นตอนที่ 5 — Pull Images และ Start Services
+## ขั้นตอนที่ 6 — Pull Images และ Start Services
 
 ```bash
 cd d:\NodeRed
 
-# Pull images ทั้งหมด
+# Pull images ทั้งหมด (mosquitto, nodered, n8n, ngrok)
 docker compose pull
 
-# Start ทั้งหมด
+# Start ทุก service พร้อมกัน
 docker compose up -d
 ```
 
@@ -193,13 +170,33 @@ docker compose ps
 ```
 NAME         IMAGE                    STATUS
 mosquitto    eclipse-mosquitto:2      running (healthy)
-nodered      nodered/node-red:latest  running
+nodered      nodered/node-red:latest  running (healthy)
 n8n          n8nio/n8n:latest         running
+ngrok        ngrok/ngrok:latest       running
 ```
+
+ตรวจสอบ ngrok tunnel ขึ้นแล้ว:
+```bash
+docker logs ngrok
+```
+ควรเห็น: `started tunnel` และ URL ของ domain
+
+หรือเปิด [http://localhost:4040](http://localhost:4040) — ถ้าเห็น dashboard แสดงว่า tunnel พร้อม
 
 ---
 
-## ขั้นตอนที่ 6 — ติดตั้ง OPC-UA Node ใน Node-RED
+## ขั้นตอนที่ 7 — ทดสอบเข้าใช้งาน
+
+| Service | URL | Login |
+|---------|-----|-------|
+| Node-RED | http://localhost:1880 | ใช้ username/password จาก `.env` |
+| N8N (local) | http://localhost:5678 | สร้าง account ครั้งแรก |
+| N8N (public) | `https://your-domain.ngrok-free.dev` | เดียวกับ local |
+| ngrok Dashboard | http://localhost:4040 | ไม่ต้อง login |
+
+---
+
+## ขั้นตอนที่ 8 — ติดตั้ง OPC-UA Node ใน Node-RED
 
 ```bash
 # ติดตั้ง node
@@ -209,76 +206,27 @@ docker exec nodered npm install node-red-contrib-opcua --prefix /data
 docker restart nodered
 ```
 
-ตรวจสอบ:
-```bash
-docker exec nodered ls /data/node_modules | findstr opcua
-# ควรแสดง: node-red-contrib-opcua
-```
-
 หรือติดตั้งผ่าน UI: Node-RED → ☰ Menu → **Manage palette** → Install → ค้น `node-red-contrib-opcua`
 
 ---
 
-## ขั้นตอนที่ 7 — ตั้งค่า MQTT Credential ใน N8N
+## ขั้นตอนที่ 9 — ตั้งค่า MQTT Credential ใน N8N
 
 1. เปิด [http://localhost:5678](http://localhost:5678) → สร้างบัญชี Admin
 2. Settings → Credentials → **Add Credential**
 3. ค้นหา `MQTT` → เลือก **MQTT**
 4. กรอก:
-   - **Host:** `mosquitto` (ชื่อ service ใน Docker network — ไม่ใช่ localhost)
+   - **Host:** `mosquitto` (ชื่อ service ใน Docker network — ไม่ใช่ `localhost`)
    - **Port:** `1883`
 5. Save
 
 ---
 
-## ขั้นตอนที่ 8 — Setup ngrok สำหรับ OAuth2
+## ขั้นตอนที่ 10 — Setup Google OAuth2 (Gmail / Google Drive)
 
 > ข้ามขั้นตอนนี้ถ้ายังไม่ต้องการ Gmail / Google Drive
 
-### ติดตั้งและตั้งค่า
-
-```bash
-# ติดตั้ง
-winget install ngrok.ngrok
-
-# สมัครบัญชีที่ https://dashboard.ngrok.com/signup
-# แล้วนำ Authtoken มาใส่
-ngrok config add-authtoken YOUR_TOKEN_HERE
-```
-
-### สร้าง Static Domain (ฟรี 1 domain)
-
-1. ไปที่ [dashboard.ngrok.com](https://dashboard.ngrok.com) → **Cloud Edge** → **Domains** → **New Domain**
-2. จะได้ domain เช่น `your-name-abc.ngrok-free.app`
-
-ข้อดีของ Static Domain: URL ไม่เปลี่ยนทุกครั้งที่ restart — ไม่ต้องอัปเดต Google Console ซ้ำ
-
-### รัน ngrok Tunnel
-
-```bash
-# รัน (แทน your-domain ด้วย domain ที่ได้)
-ngrok http --domain=your-domain.ngrok-free.app 5678
-```
-
-**ngrok รันบน Windows host โดยตรง** — ไม่ได้อยู่ใน Docker ดังนั้น `docker compose restart` ไม่กระทบ ngrok
-
-### อัปเดต .env
-
-```env
-NGROK_URL=https://your-domain.ngrok-free.app
-```
-
-### Restart N8N เพื่อโหลด URL ใหม่
-
-```bash
-docker compose up -d --force-recreate n8n
-```
-
----
-
-## ขั้นตอนที่ 9 — Setup Google OAuth2 (Gmail / Google Drive)
-
-### 9.1 สร้าง Google Cloud Project
+### 10.1 สร้าง Google Cloud Project
 
 1. ไปที่ [https://console.cloud.google.com](https://console.cloud.google.com)
 2. สร้าง Project ใหม่ (หรือใช้ที่มีอยู่)
@@ -287,35 +235,36 @@ docker compose up -d --force-recreate n8n
    - **Google Drive API** → ค้น "Google Drive API" → Enable
    - **Generative Language API** → ค้น "Generative Language API" → Enable
 
-### 9.2 สร้าง OAuth2 Client ID
+### 10.2 สร้าง OAuth2 Client ID
 
 1. APIs & Services → **Credentials** → **Create Credentials** → **OAuth client ID**
 2. Application type: **Web application**
 3. Authorized redirect URIs → Add:
    ```
-   https://your-domain.ngrok-free.app/rest/oauth2-credential/callback
+   https://your-domain.ngrok-free.dev/rest/oauth2-credential/callback
    ```
-4. Save → Download JSON → เก็บ `Client ID` และ `Client Secret`
+   > เปลี่ยน `your-domain.ngrok-free.dev` เป็นค่า `NGROK_DOMAIN` ใน `.env` ของคุณ
+4. Save → เก็บ `Client ID` และ `Client Secret`
 
-### 9.3 เพิ่ม Credentials ใน N8N
+### 10.3 เพิ่ม Credentials ใน N8N
 
 > **สำคัญ:** ต้องเปิด N8N ผ่าน ngrok URL เท่านั้น ไม่ใช่ localhost
 
-1. เปิด `https://your-domain.ngrok-free.app`
+1. เปิด `https://your-domain.ngrok-free.dev`
 2. Settings → Credentials → Add Credential
-3. สำหรับ Gmail: เลือก **Gmail OAuth2 API** → ใส่ Client ID + Secret → **Connect**
-4. สำหรับ Drive: เลือก **Google Drive OAuth2 API** → ใส่ Client ID + Secret → **Connect**
+3. Gmail: เลือก **Gmail OAuth2 API** → ใส่ Client ID + Secret → **Connect**
+4. Drive: เลือก **Google Drive OAuth2 API** → ใส่ Client ID + Secret → **Connect**
 5. หน้าต่าง Google Login จะเปิดขึ้น → Allow
 6. สถานะเป็น **Connected** = สำเร็จ
 
-### 9.4 Gemini API Key
+### 10.4 Gemini API Key
 
 1. สร้าง API Key ที่ [https://aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)
 2. N8N: Settings → Credentials → New → **Google Gemini(PaLM) Api** → วาง Key
 
 ---
 
-## ขั้นตอนที่ 10 — ทดสอบ MQTT
+## ขั้นตอนที่ 11 — ทดสอบ MQTT
 
 ```bash
 # Subscribe ดูข้อมูลทุก topic ใต้ plc/
@@ -329,30 +278,6 @@ docker exec mosquitto mosquitto_pub -t "plc/data/temperature" -m "{\"value\":75.
 
 ---
 
-## การจัดการ ngrok URL เมื่อเปลี่ยน (Free plan ที่ไม่ใช้ Static Domain)
-
-| สถานการณ์ | ต้องทำอะไร |
-|-----------|-----------|
-| `docker compose restart n8n` | ไม่ต้องทำอะไรกับ ngrok ✅ |
-| ngrok ยังรันอยู่, URL เดิม | ไม่ต้องทำอะไร ✅ |
-| ngrok เปิดใหม่ (URL เปลี่ยน) | อัปเดต .env → restart n8n → อัปเดต Google Console ⚠️ |
-
-ถ้า URL เปลี่ยน ให้ทำตามลำดับ:
-```bash
-# 1. เปิด ngrok ใหม่ — ดู URL จาก terminal
-ngrok http 5678
-
-# 2. แก้ไข .env
-#    NGROK_URL=https://xyz789.ngrok-free.app
-
-# 3. Restart N8N
-docker compose up -d --force-recreate n8n
-
-# 4. อัปเดต Google Cloud Console → Authorized redirect URIs
-```
-
----
-
 ## คำสั่งที่ใช้บ่อย
 
 ```bash
@@ -363,11 +288,13 @@ docker compose ps
 docker compose logs -f
 
 # ดู log เฉพาะ service
+docker compose logs -f ngrok
 docker compose logs -f n8n
 docker compose logs -f nodered
 docker compose logs -f mosquitto
 
 # Restart service เดียว (หลังแก้ .env)
+docker compose up -d --force-recreate ngrok
 docker compose up -d --force-recreate n8n
 
 # หยุดทั้งหมด
@@ -392,18 +319,21 @@ docker stats
 
 ### ติดตั้งครั้งแรก
 - [ ] ติดตั้ง Docker Desktop + WSL2
-- [ ] แก้ไข `.env` — ใส่ `OPC_SERVER_IP`, `N8N_ENCRYPTION_KEY`
-- [ ] `docker compose up -d`
+- [ ] สมัครบัญชี ngrok + สร้าง Static Domain
+- [ ] แก้ไข `.env` — ใส่ `NGROK_AUTHTOKEN`, `NGROK_DOMAIN`, `NGROK_URL`, `OPC_SERVER_IP`, `N8N_ENCRYPTION_KEY`
+- [ ] สร้าง bcrypt hash: `docker run --rm -it nodered/node-red node-red-admin hash-pw`
+- [ ] ใส่ hash ลงใน `.env` ที่ `NR_ADMIN_PASSWORD_HASH`
+- [ ] `docker compose pull` แล้ว `docker compose up -d`
+- [ ] ตรวจสอบ ngrok tunnel: `docker logs ngrok` หรือ http://localhost:4040
+- [ ] ทดสอบ login Node-RED ที่ http://localhost:1880
+- [ ] ทดสอบ login N8N ที่ http://localhost:5678
 - [ ] ติดตั้ง `node-red-contrib-opcua` ใน Node-RED
 - [ ] ตั้งค่า MQTT Credential ใน N8N (host: `mosquitto`, port: `1883`)
 
 ### Setup OAuth2 (Google Services)
-- [ ] ติดตั้ง ngrok + สร้าง Static Domain
-- [ ] แก้ไข `.env` ใส่ `NGROK_URL` (ไม่มี space)
-- [ ] `docker compose up -d --force-recreate n8n`
 - [ ] Google Cloud: Enable Gmail API + Drive API + Generative Language API
 - [ ] Google Cloud: สร้าง OAuth2 Client ID + ใส่ redirect URI
-- [ ] เพิ่ม Gmail + Drive Credentials ใน N8N (ผ่าน ngrok URL)
+- [ ] เพิ่ม Gmail + Drive Credentials ใน N8N (ผ่าน ngrok URL เท่านั้น)
 - [ ] สร้าง Gemini API Key + เพิ่มใน N8N
 
 ### ทดสอบ
@@ -418,9 +348,11 @@ docker stats
 
 | ปัญหา | วิธีแก้ |
 |-------|---------|
-| OAuth2 callback ล้มเหลว | เปิด N8N ผ่าน ngrok URL ไม่ใช่ localhost |
+| Node-RED login ไม่ได้ | `NR_ADMIN_PASSWORD_HASH` ต้องขึ้นต้นด้วย `$2b$` — ตรวจสอบว่า copy ครบ |
+| Node-RED เข้าได้โดยไม่มี login | `NR_ADMIN_PASSWORD_HASH` ว่างหรือไม่ได้ส่งเข้า container |
+| ngrok ไม่ขึ้น | `docker logs ngrok` — มักเป็น `NGROK_AUTHTOKEN` ผิดหรือ domain ไม่ตรง |
+| OAuth2 callback ล้มเหลว | ต้องเปิด N8N ผ่าน ngrok URL ไม่ใช่ localhost |
 | N8N เชื่อม MQTT ไม่ได้ | ใช้ hostname `mosquitto` ไม่ใช่ `localhost` |
-| NGROK_URL มี space นำหน้า | แก้ `.env`: `NGROK_URL=https://...` (ลบ space) |
 | `mosquitto unhealthy` | `docker logs mosquitto` — มักเป็น mosquitto.conf ผิด |
 | Node-RED ไม่โหลด OPC node | `docker restart nodered` แล้วรอ 30 วิ |
 | Port 1883 ถูกใช้งาน | `netstat -ano \| findstr :1883` หา PID แล้ว `taskkill /PID xxx /F` |

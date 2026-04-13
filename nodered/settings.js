@@ -3,15 +3,18 @@ module.exports = {
     uiPort: process.env.PORT || 1880,
     uiHost: "0.0.0.0",
 
-    // ─── Security (เปิด auth ถ้าต้องการ) ─────────────────────
-    // adminAuth: {
-    //     type: "credentials",
-    //     users: [{
-    //         username: "admin",
-    //         password: "$2b$08$...", // bcrypt hash
-    //         permissions: "*"
-    //     }]
-    // },
+    // ─── Security ─────────────────────────────────────────────
+    // สร้าง password hash ด้วยคำสั่ง:
+    //   docker exec -it nodered node-red-admin hash-pw
+    // แล้วใส่ค่าที่ได้ลงใน .env ที่ตัวแปร NR_ADMIN_PASSWORD_HASH
+    adminAuth: {
+        type: "credentials",
+        users: [{
+            username: process.env.NR_ADMIN_USERNAME || "admin",
+            password: process.env.NR_ADMIN_PASSWORD_HASH,
+            permissions: "*"
+        }]
+    },
 
     // ─── Timezone ────────────────────────────────────────────
     timezone: "Asia/Bangkok",
