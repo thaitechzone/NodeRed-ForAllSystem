@@ -582,7 +582,11 @@ docker compose logs -f grafana
 - Contact point: Email หรือ Webhook
 
 ### ระดับ 4 — Real ESP32
-เปลี่ยน MQTT Broker ใน ESP32 firmware จาก `broker.hivemq.com` เป็น IP ของ Windows host (ที่รัน Mosquitto) แล้วดูข้อมูลจริงใน Dashboard
+Flash firmware `esp32-firmware/` ลง ESP32 จริง:
+1. เปิด `esp32-firmware/include/config.h` → แก้ WiFi + MQTT Host
+2. Build & Upload ด้วย PlatformIO
+3. เปิด Serial Monitor ดู log การเชื่อมต่อ
+4. ดูข้อมูลจริงใน Grafana Dashboard
 
 ---
 
@@ -591,6 +595,10 @@ docker compose logs -f grafana
 | ไฟล์ | คำอธิบาย |
 |------|---------|
 | `flows/lab1-mqtt-influxdb-grafana.json` | Node-RED flow สำหรับ import |
+| `esp32-firmware/platformio.ini` | PlatformIO project config |
+| `esp32-firmware/include/config.h` | WiFi / MQTT / Sensor config |
+| `esp32-firmware/src/main.cpp` | ESP32 firmware |
+| `esp32-firmware/test/test_payload.py` | Python MQTT simulator (ไม่ต้องใช้ ESP32) |
 | `docker-compose.yml` | กำหนด services ทั้งหมด |
 | `.env` | ตัวแปรสำคัญ (Token, Password) |
 | `grafana/provisioning/datasources/influxdb.yml` | Auto-configure Grafana datasource |
