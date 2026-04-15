@@ -7,8 +7,8 @@
 // ────────────────────────────────────────────────────────────
 //  WiFi Credentials
 // ────────────────────────────────────────────────────────────
-#define WIFI_SSID       "myHome_2.4GHz"
-#define WIFI_PASSWORD   "0939391546"
+#define WIFI_SSID       "Casa_Thalar"
+#define WIFI_PASSWORD   "casa1234"
 
 // ────────────────────────────────────────────────────────────
 //  Device Identity
@@ -23,7 +23,7 @@
 // ────────────────────────────────────────────────────────────
 
 // ตัวเลือก A: HiveMQ Public Broker (ไม่ต้องตั้ง server เอง)
-#define MQTT_HOST       "192.168.1.6"
+#define MQTT_HOST       "192.168.1.121"
 #define MQTT_PORT       1883
 #define MQTT_USER       ""          // ไม่ต้อง auth
 #define MQTT_PASS       ""
