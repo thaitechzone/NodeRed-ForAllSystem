@@ -93,39 +93,30 @@ echo.
 call :CHECK_PREREQ
 if errorlevel 1 goto MENU
 
-echo  [1/5] Pull Docker images...
+echo  [1/3] Pull Docker images...
 docker compose pull
 if errorlevel 1 ( echo  [ERROR] pull ล้มเหลว & pause & goto MENU )
 
 echo.
-echo  [2/5] Start services...
+echo  [2/3] Start services...
 docker compose up -d
 if errorlevel 1 ( echo  [ERROR] start ล้มเหลว & pause & goto MENU )
 
 echo.
-echo  [3/5] รอ Node-RED พร้อม (health check)...
+echo  [3/3] รอ Node-RED พร้อม (health check)...
 call :WAIT_NODERED
 if errorlevel 1 (
     echo  [WARN] Node-RED ยังไม่ตอบสนองหลังจาก 60s — ตรวจ logs ด้วย docker compose logs nodered
 )
 
 echo.
-echo  [4/5] ติดตั้ง node-red-contrib-opcua...
-docker exec nodered npm install node-red-contrib-opcua --prefix /data 2>nul
-if errorlevel 1 (
-    echo  [WARN] ติดตั้ง node-red-contrib-opcua ล้มเหลว — ลองติดตั้งผ่าน Node-RED UI แทน
-) else (
-    echo  [OK]  ติดตั้ง node-red-contrib-opcua สำเร็จ
-    docker restart nodered >nul
-    echo  [OK]  Restart Node-RED แล้ว
-    timeout /t 5 /nobreak >nul
-)
-
-echo.
-echo  [5/5] ตรวจสถานะ...
 call :SHOW_STATUS
 echo.
 echo  Setup เสร็จสิ้น!
+echo.
+echo  หากต้องการใช้ OPC-UA ติดตั้งเพิ่มด้วยคำสั่ง:
+echo    docker exec nodered npm install node-red-contrib-opcua --prefix /data
+echo    docker restart nodered
 call :SHOW_URLS
 pause & goto MENU
 
@@ -181,13 +172,14 @@ pause & goto MENU
 cls
 echo.
 echo  เลือก service ที่ต้องการดู logs:
-echo  [1] ทั้งหมด   [2] nodered   [3] n8n   [4] mosquitto
+echo  [1] ทั้งหมด   [2] nodered   [3] n8n   [4] mosquitto   [5] ngrok
 echo.
-set /p LSERVICE="  เลือก [1-4]: "
+set /p LSERVICE="  เลือก [1-5]: "
 if "%LSERVICE%"=="1" docker compose logs -f
 if "%LSERVICE%"=="2" docker compose logs -f nodered
 if "%LSERVICE%"=="3" docker compose logs -f n8n
 if "%LSERVICE%"=="4" docker compose logs -f mosquitto
+if "%LSERVICE%"=="5" docker compose logs -f ngrok
 goto MENU
 
 :: ────────────────────────────────────────────────────────────

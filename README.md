@@ -82,6 +82,7 @@ NGROK_DOMAIN=your-domain.ngrok-free.dev      # ไม่มี https://
 NGROK_URL=https://your-domain.ngrok-free.dev # มี https://
 
 # ─── N8N ─────────────────────────────────────────────────
+# สร้างด้วย (CMD): powershell -Command "-join ((1..32) | ForEach-Object { '{0:x}' -f (Get-Random -Max 16) })"
 N8N_ENCRYPTION_KEY=change-this-to-random-32-char-string
 
 # ─── Node-RED Admin Auth ─────────────────────────────────

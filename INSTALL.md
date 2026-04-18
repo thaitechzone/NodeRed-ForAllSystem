@@ -89,7 +89,7 @@ NGROK_DOMAIN=your-name-abc.ngrok-free.dev       # ไม่ต้องมี ht
 NGROK_URL=https://your-name-abc.ngrok-free.dev  # มี https://
 
 # ─── N8N ─────────────────────────────────────────────────
-# สร้างด้วย: node -e "console.log(require('crypto').randomBytes(16).toString('hex'))"
+# สร้างด้วย (CMD): powershell -Command "-join ((1..32) | ForEach-Object { '{0:x}' -f (Get-Random -Max 16) })"
 N8N_ENCRYPTION_KEY=random-32-char-string
 
 # ─── Node-RED Admin Auth ─────────────────────────────────

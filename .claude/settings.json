@@ -12,7 +12,8 @@
       "Bash(curl -s -H \"Authorization: Token ZEFqwNspJYEQ8HAucne-PUUHohOsl18e8nRfu_3q0_o3Z_qoluzc3Od_f8w32MSCir0CBDhm5AyGpF8soK3clQ==\" \"http://localhost:8086/api/v2/buckets?org=iot\")",
       "Bash(curl -s -X POST 'http://localhost:8086/api/v2/query?org=iot' -H 'Authorization: Token ZEFqwNspJYEQ8HAucne-PUUHohOsl18e8nRfu_3q0_o3Z_qoluzc3Od_f8w32MSCir0CBDhm5AyGpF8soK3clQ==' -H 'Content-Type: application/vnd.flux' --data 'from\\(bucket:\"sensors\"\\) *)",
       "Bash(node -e \"require\\('bcryptjs'\\)\")",
-      "Bash(node -e \"const crypto=require\\('crypto'\\); console.log\\(crypto.getHashes\\(\\).includes\\('sha256'\\)\\)\")"
+      "Bash(node -e \"const crypto=require\\('crypto'\\); console.log\\(crypto.getHashes\\(\\).includes\\('sha256'\\)\\)\")",
+      "Bash(powershell -Command \"-join \\(\\(1..32\\) | ForEach-Object { '{0:x}' -f \\(Get-Random -Max 16\\) }\\)\")"
     ]
   }
 }
