@@ -91,9 +91,7 @@ NR_ADMIN_PASSWORD_HASH=$2b$08$REPLACE_THIS_WITH_REAL_HASH
 
 ### Generate NR_ADMIN_PASSWORD_HASH
 
-```bash
-docker run --rm -it nodered/node-red node-red-admin hash-pw
-```
+เปิด **https://bcrypt-generator.com** → ใส่ password → rounds = **8** (จำนวนรอบการเข้ารหัส — ค่า default ของ Node-RED) → Generate → copy hash
 
 > หมายเหตุ `NGROK_DOMAIN` vs `NGROK_URL`:
 > ngrok CLI รับแค่ hostname เปล่า → ใช้ `NGROK_DOMAIN`

@@ -104,29 +104,25 @@ NR_ADMIN_PASSWORD_HASH=$2b$08$REPLACE_THIS_WITH_REAL_HASH
 
 ### 5.1 สร้าง Password Hash
 
-**วิธีที่ 1 — Docker (แนะนำ ไม่ต้องติดตั้งอะไรเพิ่ม)**
-```bash
-docker run --rm -it nodered/node-red node-red-admin hash-pw
-```
+เปิดเว็บ **https://bcrypt-generator.com**
+1. ใส่ password ที่ต้องการ
+2. เลือก rounds = **8** (จำนวนรอบการเข้ารหัส — ค่า default ของ Node-RED)
+3. กด **Generate**
+4. คัดลอก hash ที่ได้
 
-**วิธีที่ 2 — CMD / PowerShell (ต้องการ Node.js)**
-```cmd
-npx node-red-admin hash-pw
+ผลลัพธ์จะได้เช่น:
 ```
-
-พิมพ์ password แล้วกด Enter — ได้ผลลัพธ์เช่น:
-```
-$2b$08$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ01234
+$2a$08$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ01234
 ```
 
 ### 5.2 ใส่ Hash ลงใน .env
 
 ```env
 NR_ADMIN_USERNAME=admin
-NR_ADMIN_PASSWORD_HASH=$2b$08$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ01234
+NR_ADMIN_PASSWORD_HASH=$2a$08$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ01234
 ```
 
-> hash ขึ้นต้นด้วย `$2b$` เสมอ — ถ้าไม่ใช่แสดงว่า copy ไม่ครบ
+> hash ขึ้นต้นด้วย `$2a$` หรือ `$2b$` — ถ้าไม่ใช่แสดงว่า copy ไม่ครบ
 
 ---
 
@@ -296,7 +292,7 @@ docker stats
 - [ ] สมัครบัญชี ngrok + สร้าง Static Domain
 - [ ] แก้ไข `.env` — ใส่ `NGROK_AUTHTOKEN`, `NGROK_DOMAIN`, `NGROK_URL`
 - [ ] แก้ไข `.env` — ตั้งค่า `N8N_ENCRYPTION_KEY`
-- [ ] สร้าง bcrypt hash: `docker run --rm -it nodered/node-red node-red-admin hash-pw`
+- [ ] สร้าง bcrypt hash ที่ https://bcrypt-generator.com (rounds=8 — ค่า default ของ Node-RED)
 - [ ] ใส่ hash ลงใน `.env` ที่ `NR_ADMIN_PASSWORD_HASH`
 - [ ] `docker compose pull` แล้ว `docker compose up -d`
 - [ ] ตรวจสอบ ngrok tunnel: `docker logs ngrok` หรือ http://localhost:4040

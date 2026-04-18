@@ -10,7 +10,9 @@
       "Bash(curl -s -u \"admin:Pam-6395\" \"http://localhost:3000/api/datasources/name/InfluxDB\")",
       "Bash(curl -s -X POST -u admin:Pam-6395 http://localhost:3000/api/datasources/1/health -H 'Content-Type: application/json')",
       "Bash(curl -s -H \"Authorization: Token ZEFqwNspJYEQ8HAucne-PUUHohOsl18e8nRfu_3q0_o3Z_qoluzc3Od_f8w32MSCir0CBDhm5AyGpF8soK3clQ==\" \"http://localhost:8086/api/v2/buckets?org=iot\")",
-      "Bash(curl -s -X POST 'http://localhost:8086/api/v2/query?org=iot' -H 'Authorization: Token ZEFqwNspJYEQ8HAucne-PUUHohOsl18e8nRfu_3q0_o3Z_qoluzc3Od_f8w32MSCir0CBDhm5AyGpF8soK3clQ==' -H 'Content-Type: application/vnd.flux' --data 'from\\(bucket:\"sensors\"\\) *)"
+      "Bash(curl -s -X POST 'http://localhost:8086/api/v2/query?org=iot' -H 'Authorization: Token ZEFqwNspJYEQ8HAucne-PUUHohOsl18e8nRfu_3q0_o3Z_qoluzc3Od_f8w32MSCir0CBDhm5AyGpF8soK3clQ==' -H 'Content-Type: application/vnd.flux' --data 'from\\(bucket:\"sensors\"\\) *)",
+      "Bash(node -e \"require\\('bcryptjs'\\)\")",
+      "Bash(node -e \"const crypto=require\\('crypto'\\); console.log\\(crypto.getHashes\\(\\).includes\\('sha256'\\)\\)\")"
     ]
   }
 }
