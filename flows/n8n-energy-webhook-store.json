@@ -1,0 +1,81 @@
+[
+  {
+    "id": "enrWkTbl001A9xQz",
+    "name": "Energy Webhook Store",
+    "active": false,
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "energy-machine-telemetry",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "id": "1a18fcb2-6c8b-4efc-9ca4-128a06ef10a1",
+        "name": "Webhook In",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "webhookId": "energy-machine-telemetry",
+        "position": [
+          220,
+          280
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const store = $getWorkflowStaticData('global');\nif (!Array.isArray(store.rows)) {\n  store.rows = [];\n}\n\nconst incoming = $json.body ?? $json;\nconst data = incoming.data ?? incoming;\n\nconst row = {\n  id: `${Date.now()}-${Math.floor(Math.random() * 100000)}`,\n  received_at: new Date().toISOString(),\n  event: incoming.event ?? 'machine_energy_telemetry',\n  source: incoming.source ?? 'node-red',\n  topic: incoming.topic ?? 'smartfactory/MC-01/energy/telemetry',\n  machine_id: data.machine_id ?? null,\n  active_power_kw: data.active_power_kw ?? null,\n  power_factor: data.power_factor ?? null,\n  frequency_hz: data.frequency_hz ?? null,\n  voltage_v: data.voltage_v ?? null,\n  current_a: data.current_a ?? null,\n  payload: incoming\n};\n\nstore.rows.push(row);\n\n// Keep last 10,000 rows in n8n workflow static data\nif (store.rows.length > 10000) {\n  store.rows = store.rows.slice(-10000);\n}\n\nreturn [{\n  json: {\n    ok: true,\n    saved: true,\n    table: 'workflow_static_data.rows',\n    total_rows: store.rows.length,\n    latest: row\n  }\n}];"
+        },
+        "id": "3cc66d72-fab6-4b31-bdb8-e9c5e7eefef2",
+        "name": "Save To n8n Table",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          520,
+          280
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{$json}}",
+          "options": {}
+        },
+        "id": "8f95f2fa-fbf3-45d9-80d0-6df8a88e44df",
+        "name": "Respond",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.2,
+        "position": [
+          800,
+          280
+        ]
+      }
+    ],
+    "connections": {
+      "Webhook In": {
+        "main": [
+          [
+            {
+              "node": "Save To n8n Table",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Save To n8n Table": {
+        "main": [
+          [
+            {
+              "node": "Respond",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1"
+    }
+  }
+]
