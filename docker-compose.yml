@@ -38,8 +38,6 @@ services:
       - ./nodered/settings.js:/data/settings.js:ro
     environment:
       - TZ=${TZ}
-      - OPC_SERVER_IP=${OPC_SERVER_IP}
-      - OPC_SERVER_PORT=${OPC_SERVER_PORT}
       - NR_ADMIN_USERNAME=${NR_ADMIN_USERNAME}
       - NR_ADMIN_PASSWORD_HASH=${NR_ADMIN_PASSWORD_HASH}
     restart: unless-stopped

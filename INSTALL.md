@@ -96,14 +96,7 @@ N8N_ENCRYPTION_KEY=random-32-char-string
 # สร้าง hash ดูขั้นตอนที่ 5
 NR_ADMIN_USERNAME=admin
 NR_ADMIN_PASSWORD_HASH=$2b$08$REPLACE_THIS_WITH_REAL_HASH
-
-# ─── OPC Server ──────────────────────────────────────────
-# IP ของเครื่องที่รัน OPC Server (ไม่ใช่ localhost เพราะ Node-RED อยู่ใน Docker)
-OPC_SERVER_IP=192.168.1.100
-OPC_SERVER_PORT=4840
 ```
-
-> หา `OPC_SERVER_IP`: เปิด CMD แล้วพิมพ์ `ipconfig` ดูที่ IPv4 Address
 
 ---
 
@@ -182,14 +175,18 @@ docker logs ngrok
 
 ---
 
-## ขั้นตอนที่ 8 — ติดตั้ง OPC-UA Node ใน Node-RED
+## ขั้นตอนที่ 8 — ติดตั้ง OPC-UA Node ใน Node-RED (optional)
+
+ข้ามขั้นตอนนี้ถ้ายังไม่ต้องการ OPC-UA
 
 ```bash
 docker exec nodered npm install node-red-contrib-opcua --prefix /data
 docker restart nodered
 ```
 
-หรือติดตั้งผ่าน UI: Node-RED → ☰ Menu → **Manage palette** → Install → ค้น `node-red-contrib-opcua`
+จากนั้นตั้งค่า OPC-UA endpoint ใน **Node-RED UI โดยตรง**:
+- ดับเบิ้ลคลิก OpcUa-Client node → Endpoint → `opc.tcp://<IP>:4840`
+- ไม่ต้องตั้งค่าใน `.env`
 
 ---
 
@@ -298,14 +295,14 @@ docker stats
 - [ ] ติดตั้ง Docker Desktop + WSL2
 - [ ] สมัครบัญชี ngrok + สร้าง Static Domain
 - [ ] แก้ไข `.env` — ใส่ `NGROK_AUTHTOKEN`, `NGROK_DOMAIN`, `NGROK_URL`
-- [ ] แก้ไข `.env` — ตั้งค่า `N8N_ENCRYPTION_KEY`, `OPC_SERVER_IP`
+- [ ] แก้ไข `.env` — ตั้งค่า `N8N_ENCRYPTION_KEY`
 - [ ] สร้าง bcrypt hash: `docker run --rm -it nodered/node-red node-red-admin hash-pw`
 - [ ] ใส่ hash ลงใน `.env` ที่ `NR_ADMIN_PASSWORD_HASH`
 - [ ] `docker compose pull` แล้ว `docker compose up -d`
 - [ ] ตรวจสอบ ngrok tunnel: `docker logs ngrok` หรือ http://localhost:4040
 - [ ] ทดสอบ login Node-RED ที่ http://localhost:1880
 - [ ] ทดสอบ login N8N ที่ http://localhost:5678
-- [ ] ติดตั้ง `node-red-contrib-opcua` ใน Node-RED (ถ้าใช้ OPC-UA)
+- [ ] ติดตั้ง `node-red-contrib-opcua` ใน Node-RED และตั้ง endpoint ใน UI (ถ้าใช้ OPC-UA)
 - [ ] ตั้งค่า MQTT Credential ใน N8N (host: `mosquitto`, port: `1883`)
 
 ### Setup OAuth2 (Google Services)
@@ -316,7 +313,7 @@ docker stats
 
 ### ทดสอบ
 - [ ] MQTT: `mosquitto_pub` → `mosquitto_sub` → รับได้
-- [ ] Node-RED: OPC UA Client เชื่อม OPC Server ได้ (ถ้าใช้ OPC-UA)
+- [ ] Node-RED: OPC UA Client เชื่อม OPC Server ได้ — ตั้ง endpoint `opc.tcp://<IP>:4840` ใน node โดยตรง (ถ้าใช้ OPC-UA)
 - [ ] N8N: MQTT Trigger รับข้อมูลจาก Node-RED ได้
 - [ ] N8N: Gmail / Drive OAuth2 status = Connected
 

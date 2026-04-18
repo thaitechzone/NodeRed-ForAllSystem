@@ -87,10 +87,6 @@ N8N_ENCRYPTION_KEY=change-this-to-random-32-char-string
 # ─── Node-RED Admin Auth ─────────────────────────────────
 NR_ADMIN_USERNAME=admin
 NR_ADMIN_PASSWORD_HASH=$2b$08$REPLACE_THIS_WITH_REAL_HASH
-
-# ─── OPC Server ──────────────────────────────────────────
-OPC_SERVER_IP=192.168.1.100
-OPC_SERVER_PORT=4840
 ```
 
 ### Generate NR_ADMIN_PASSWORD_HASH
@@ -119,7 +115,7 @@ mosquitto:
     test: ["CMD", "mosquitto_sub", "-t", "$$SYS/#", "-C", "1", "-W", "3"]
 ```
 
-### Service 2: nodered (OPC-UA + MQTT)
+### Service 2: nodered (MQTT + Flow Automation)
 
 ```yaml
 nodered:
@@ -131,7 +127,7 @@ nodered:
       condition: service_healthy
 ```
 
-Nodes ที่ติดตั้งเพิ่มได้:
+ต้องการ OPC-UA? ติดตั้ง node เพิ่มและตั้ง endpoint ใน Node-RED UI โดยตรง:
 ```bash
 docker exec nodered npm install node-red-contrib-opcua --prefix /data
 docker restart nodered
