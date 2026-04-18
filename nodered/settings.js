@@ -6,6 +6,13 @@ module.exports = {
     // ─── Security ─────────────────────────────────────────────
     // สร้าง password hash ที่ https://bcrypt-generator.com (rounds=8)
     // แล้วใส่ค่าที่ได้ลงใน .env ที่ตัวแปร NR_ADMIN_PASSWORD_HASH
+    // 
+    // วิธีสร้าง hash:
+    // 1. ไปที่ https://bcrypt-generator.com
+    // 2. ใส่ password ที่ต้องการ (เช่น admin)
+    // 3. เลือก rounds = 8
+    // 4. คัดลอก hash ที่ได้ (ต้องขึ้นต้นด้วย $2a$08$ หรือ $2b$08$)
+    // 5. นำไปใส่ใน .env ที่ NR_ADMIN_PASSWORD_HASH
     adminAuth: {
         type: "credentials",
         users: [{
