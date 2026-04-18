@@ -4,8 +4,7 @@ module.exports = {
     uiHost: "0.0.0.0",
 
     // ─── Security ─────────────────────────────────────────────
-    // สร้าง password hash ด้วยคำสั่ง:
-    //   docker exec -it nodered node-red-admin hash-pw
+    // สร้าง password hash ที่ https://bcrypt-generator.com (rounds=8)
     // แล้วใส่ค่าที่ได้ลงใน .env ที่ตัวแปร NR_ADMIN_PASSWORD_HASH
     adminAuth: {
         type: "credentials",
@@ -49,10 +48,7 @@ module.exports = {
     },
 
     // ─── Function Global Context ──────────────────────────────
-    // ค่าที่ใช้ได้ใน Function node ทุกตัว
-    functionGlobalContext: {
-        OPC_SERVER: `opc.tcp://${process.env.OPC_SERVER_IP || '192.168.1.100'}:${process.env.OPC_SERVER_PORT || '4840'}`
-    },
+    functionGlobalContext: {},
 
     // ─── Node Settings ────────────────────────────────────────
     debugMaxLength: 1000,
