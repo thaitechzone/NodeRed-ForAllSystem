@@ -1,3 +1,17 @@
+# ════════════════════════════════════════════════════════════════════════════════
+# Node-RED + N8N + MQTT + ngrok Stack
+# 
+# ตัวแปรที่ต้องใน .env file:
+#   - TZ                    (Timezone)
+#   - NGROK_AUTHTOKEN       (ngrok authentication token)
+#   - NGROK_DOMAIN          (ngrok static domain, ไม่มี https://)
+#   - NGROK_URL             (ngrok URL for N8N/ngrok CLI, มี https://)
+#   - N8N_ENCRYPTION_KEY    (N8N encryption key - 32 char hex)
+#
+# หมายเหตุ: Docker Compose จะอ่าน .env file โดยอัตโนมัติจาก directory เดียวกัน
+# และ ngrok service ด้านล่างจะใช้ NGROK_URL กับ --url เพื่อรองรับ ngrok CLI รุ่นใหม่
+# ════════════════════════════════════════════════════════════════════════════════
+
 services:
 
   # ════════════════════════════════════════════════════════
@@ -26,7 +40,7 @@ services:
 
   # ════════════════════════════════════════════════════════
   #  Node-RED — Flow-based automation
-  #  UI : http://localhost:1880
+  #  UI : http://localhost:1880 (ไม่ต้อง login)
   # ════════════════════════════════════════════════════════
   nodered:
     image: nodered/node-red:latest
@@ -36,10 +50,6 @@ services:
     volumes:
       - nodered_data:/data
       - ./nodered/settings.js:/data/settings.js
-    environment:
-      - TZ=${TZ}
-      - NR_ADMIN_USERNAME=${NR_ADMIN_USERNAME}
-      - NR_ADMIN_PASSWORD_HASH=${NR_ADMIN_PASSWORD_HASH}
     restart: unless-stopped
     depends_on:
       mosquitto:
@@ -80,11 +90,12 @@ services:
   # ════════════════════════════════════════════════════════
   #  Ngrok — Tunnel N8N to the internet
   #  Dashboard : http://localhost:4040
+  #  ใช้ NGROK_URL กับ --url แทน --domain
   # ════════════════════════════════════════════════════════
   ngrok:
     image: ngrok/ngrok:latest
     container_name: ngrok
-    command: http --domain=${NGROK_DOMAIN} n8n:5678
+    command: http n8n:5678 --url=${NGROK_URL}
     environment:
       - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
     ports:

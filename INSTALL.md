@@ -85,48 +85,19 @@ TZ=Asia/Bangkok
 
 # ─── Ngrok ───────────────────────────────────────────────
 NGROK_AUTHTOKEN=ใส่-authtoken-ที่-copy-มา
-NGROK_DOMAIN=your-name-abc.ngrok-free.dev       # ไม่ต้องมี https://
-NGROK_URL=https://your-name-abc.ngrok-free.dev  # มี https://
+NGROK_DOMAIN=your-name-abc.ngrok-free.dev       # ไม่มี https://
+NGROK_URL=https://your-name-abc.ngrok-free.dev  # ใช้ static domain ของ ngrok
 
 # ─── N8N ─────────────────────────────────────────────────
-# สร้างด้วย (CMD): powershell -Command "-join ((1..32) | ForEach-Object { '{0:x}' -f (Get-Random -Max 16) })"
+# สร้างด้วย PowerShell: powershell -Command "-join ((1..32) | ForEach-Object { '{0:x}' -f (Get-Random -Max 16) })"
 N8N_ENCRYPTION_KEY=random-32-char-string
-
-# ─── Node-RED Admin Auth ─────────────────────────────────
-# สร้าง hash ดูขั้นตอนที่ 5
-NR_ADMIN_USERNAME=admin
-NR_ADMIN_PASSWORD_HASH=$2b$08$REPLACE_THIS_WITH_REAL_HASH
 ```
+
+> **หมายเหตุ**: Node-RED ไม่มีการ login แล้ว เข้า http://localhost:1880 ได้เลย
 
 ---
 
-## ขั้นตอนที่ 5 — ตั้งค่า Node-RED Admin Login
-
-### 5.1 สร้าง Password Hash
-
-เปิดเว็บ **https://bcrypt-generator.com**
-1. ใส่ password ที่ต้องการ
-2. เลือก rounds = **8** (จำนวนรอบการเข้ารหัส — ค่า default ของ Node-RED)
-3. กด **Generate**
-4. คัดลอก hash ที่ได้
-
-ผลลัพธ์จะได้เช่น:
-```
-$2a$08$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ01234
-```
-
-### 5.2 ใส่ Hash ลงใน .env
-
-```env
-NR_ADMIN_USERNAME=admin
-NR_ADMIN_PASSWORD_HASH=$2a$08$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ01234
-```
-
-> hash ขึ้นต้นด้วย `$2a$` หรือ `$2b$` — ถ้าไม่ใช่แสดงว่า copy ไม่ครบ
-
----
-
-## ขั้นตอนที่ 6 — Pull Images และ Start Services
+## ขั้นตอนที่ 5 — Pull Images และ Start Services
 
 ```bash
 cd d:\NodeRed
@@ -152,33 +123,30 @@ n8n          n8nio/n8n:latest         running
 ngrok        ngrok/ngrok:latest       running
 ```
 
-ตรวจสอบ ngrok tunnel ขึ้นแล้ว:
-```bash
-docker logs ngrok
-```
-ควรเห็น: `started tunnel` และ URL ของ domain
-
 ---
 
-## ขั้นตอนที่ 7 — ทดสอบเข้าใช้งาน
+## ขั้นตอนที่ 6 — ทดสอบเข้าใช้งาน
 
-| Service | URL | Login |
-|---------|-----|-------|
-| Node-RED | http://localhost:1880 | username/password จาก `.env` |
+| Service | URL | หมายเหตุ |
+|---------|-----|---------|
+| Node-RED | http://localhost:1880 | ไม่ต้อง login (ปิด authentication) |
 | N8N (local) | http://localhost:5678 | สร้าง account ครั้งแรก |
 | N8N (public) | `https://your-domain.ngrok-free.dev` | เดียวกับ local |
 | ngrok Dashboard | http://localhost:4040 | ไม่ต้อง login |
 
 ---
 
-## ขั้นตอนที่ 8 — ติดตั้ง OPC-UA Node ใน Node-RED (optional)
+## ขั้นตอนที่ 7 — ติดตั้ง OPC-UA Node ใน Node-RED (optional)
 
 ข้ามขั้นตอนนี้ถ้ายังไม่ต้องการ OPC-UA
 
-```bash
-docker exec nodered npm install node-red-contrib-opcua --prefix /data
-docker restart nodered
-```
+ติดตั้งผ่าน Node-RED UI:
+
+1. เปิด http://localhost:1880
+2. ไปที่เมนู ≡ → **Manage palette**
+3. เลือกแท็บ **Install**
+4. ค้นหา `node-red-contrib-opcua`
+5. กด **Install**
 
 จากนั้นตั้งค่า OPC-UA endpoint ใน **Node-RED UI โดยตรง**:
 - ดับเบิ้ลคลิก OpcUa-Client node → Endpoint → `opc.tcp://<IP>:4840`
@@ -292,13 +260,11 @@ docker stats
 - [ ] สมัครบัญชี ngrok + สร้าง Static Domain
 - [ ] แก้ไข `.env` — ใส่ `NGROK_AUTHTOKEN`, `NGROK_DOMAIN`, `NGROK_URL`
 - [ ] แก้ไข `.env` — ตั้งค่า `N8N_ENCRYPTION_KEY`
-- [ ] สร้าง bcrypt hash ที่ https://bcrypt-generator.com (rounds=8 — ค่า default ของ Node-RED)
-- [ ] ใส่ hash ลงใน `.env` ที่ `NR_ADMIN_PASSWORD_HASH`
 - [ ] `docker compose pull` แล้ว `docker compose up -d`
 - [ ] ตรวจสอบ ngrok tunnel: `docker logs ngrok` หรือ http://localhost:4040
-- [ ] ทดสอบ login Node-RED ที่ http://localhost:1880
-- [ ] ทดสอบ login N8N ที่ http://localhost:5678
-- [ ] ติดตั้ง `node-red-contrib-opcua` ใน Node-RED และตั้ง endpoint ใน UI (ถ้าใช้ OPC-UA)
+- [ ] ทดสอบเข้า Node-RED ที่ http://localhost:1880 (ไม่ต้อง login)
+- [ ] ทดสอบสร้างบัญชี N8N ที่ http://localhost:5678
+- [ ] ติดตั้ง `node-red-contrib-opcua` ผ่าน Node-RED UI และตั้ง endpoint ใน UI (ถ้าใช้ OPC-UA)
 - [ ] ตั้งค่า MQTT Credential ใน N8N (host: `mosquitto`, port: `1883`)
 
 ### Setup OAuth2 (Google Services)
@@ -319,8 +285,6 @@ docker stats
 
 | ปัญหา | วิธีแก้ |
 |-------|---------|
-| Node-RED login ไม่ได้ | `NR_ADMIN_PASSWORD_HASH` ต้องขึ้นต้นด้วย `$2b$` — ตรวจสอบว่า copy ครบ |
-| Node-RED เข้าได้โดยไม่มี login | `NR_ADMIN_PASSWORD_HASH` ว่างหรือไม่ได้ส่งเข้า container |
 | ngrok ไม่ขึ้น | `docker logs ngrok` — มักเป็น `NGROK_AUTHTOKEN` ผิดหรือ domain ไม่ตรง |
 | OAuth2 callback ล้มเหลว | ต้องเปิด N8N ผ่าน ngrok URL ไม่ใช่ localhost |
 | N8N เชื่อม MQTT ไม่ได้ | ใช้ hostname `mosquitto` ไม่ใช่ `localhost` |

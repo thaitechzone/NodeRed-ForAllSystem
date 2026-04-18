@@ -13,14 +13,14 @@ module.exports = {
     // 3. เลือก rounds = 8
     // 4. คัดลอก hash ที่ได้ (ต้องขึ้นต้นด้วย $2a$08$ หรือ $2b$08$)
     // 5. นำไปใส่ใน .env ที่ NR_ADMIN_PASSWORD_HASH
-    adminAuth: {
-        type: "credentials",
-        users: [{
-            username: process.env.NR_ADMIN_USERNAME || "admin",
-            password: process.env.NR_ADMIN_PASSWORD_HASH,
-            permissions: "*"
-        }]
-    },
+    // adminAuth: {
+    //     type: "credentials",
+    //     users: [{
+    //         username: process.env.NR_ADMIN_USERNAME || "admin",
+    //         password: process.env.NR_ADMIN_PASSWORD_HASH || "$2a$08$0tiQX3iR0J.CwzdfG4pC..25y9aClLJSzDB8CfrCC1gBkyIU2RLAu",
+    //         permissions: "*"
+    //     }]
+    // },
 
     // ─── Timezone ────────────────────────────────────────────
     timezone: "Asia/Bangkok",

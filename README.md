@@ -43,7 +43,7 @@
 |---------|-----------|---------|
 | Node-RED UI | http://localhost:1880 | Flow editor + OPC-UA + MQTT |
 | N8N UI (local) | http://localhost:5678 | Workflow automation |
-| N8N UI (public) | `https://<NGROK_DOMAIN>` | ใช้สำหรับ OAuth2 / Webhook |
+| N8N UI (public) | `https://<your-domain>.ngrok-free.dev` | ใช้สำหรับ OAuth2 / Webhook |
 | ngrok Dashboard | http://localhost:4040 | ดู tunnel status |
 | MQTT Broker | `localhost:1883` | จาก Windows host / ESP32 |
 | MQTT (Docker internal) | `mosquitto:1883` | จาก container อื่น |
@@ -77,26 +77,27 @@ d:\NodeRed\
 TZ=Asia/Bangkok
 
 # ─── Ngrok ───────────────────────────────────────────────
+# Authtoken จาก: https://dashboard.ngrok.com/get-started/your-authtoken
 NGROK_AUTHTOKEN=your-authtoken-here
-NGROK_DOMAIN=your-domain.ngrok-free.dev      # ไม่มี https://
-NGROK_URL=https://your-domain.ngrok-free.dev # มี https://
+# Static domain จาก: https://dashboard.ngrok.com/domains (ไม่มี https://)
+NGROK_DOMAIN=your-domain.ngrok-free.dev
+# URL สำหรับ N8N (มี https://)
+NGROK_URL=https://your-domain.ngrok-free.dev
 
-# ─── N8N ─────────────────────────────────────────────────
-# สร้างด้วย (CMD): powershell -Command "-join ((1..32) | ForEach-Object { '{0:x}' -f (Get-Random -Max 16) })"
+# ─── N8N Encryption Key ──────────────────────────────────
+# สร้างด้วย PowerShell: powershell -Command "-join ((1..32) | ForEach-Object { '{0:x}' -f (Get-Random -Max 16) })"
 N8N_ENCRYPTION_KEY=change-this-to-random-32-char-string
-
-# ─── Node-RED Admin Auth ─────────────────────────────────
-NR_ADMIN_USERNAME=admin
-NR_ADMIN_PASSWORD_HASH=$2b$08$REPLACE_THIS_WITH_REAL_HASH
 ```
 
-### Generate NR_ADMIN_PASSWORD_HASH
+### ตัวแปรที่ต้อง (Required)
 
-เปิด **https://bcrypt-generator.com** → ใส่ password → rounds = **8** (จำนวนรอบการเข้ารหัส — ค่า default ของ Node-RED) → Generate → copy hash
-
-> หมายเหตุ `NGROK_DOMAIN` vs `NGROK_URL`:
-> ngrok CLI รับแค่ hostname เปล่า → ใช้ `NGROK_DOMAIN`
-> N8N ต้องการ URL เต็ม → ใช้ `NGROK_URL`
+| ตัวแปร | คำอธิบาย |
+|-------|---------|
+| `TZ` | Timezone สำหรับ Node-RED / N8N (default: `Asia/Bangkok`) |
+| `NGROK_AUTHTOKEN` | ngrok authentication token |
+| `NGROK_DOMAIN` | ngrok static domain (ไม่มี `https://`) |
+| `NGROK_URL` | ngrok URL สำหรับ N8N webhook (มี `https://`) |
+| `N8N_ENCRYPTION_KEY` | 32-char hex string สำหรับเข้ารหัส N8N credentials |
 
 ---
 
@@ -127,10 +128,11 @@ nodered:
 ```
 
 ต้องการ OPC-UA? ติดตั้ง node เพิ่มและตั้ง endpoint ใน Node-RED UI โดยตรง:
-```bash
-docker exec nodered npm install node-red-contrib-opcua --prefix /data
-docker restart nodered
-```
+
+1. เปิด http://localhost:1880
+2. ไปที่เมนู ≡ → **Manage palette**
+3. แท็บ **Install** → ค้นหา `node-red-contrib-opcua`
+4. กด **Install**
 
 ### Service 3: n8n (Workflow Automation)
 
@@ -156,7 +158,7 @@ n8n:
 ```yaml
 ngrok:
   image: ngrok/ngrok:latest
-  command: http --domain=${NGROK_DOMAIN} n8n:5678
+  command: http n8n:5678 --url=${NGROK_URL}
   ports:
     - "4040:4040"
 ```
