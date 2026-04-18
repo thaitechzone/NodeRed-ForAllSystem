@@ -1,61 +1,4 @@
-version: '3.8'
-
 services:
-
-  # ════════════════════════════════════════════════════════
-  #  InfluxDB — Time-Series Database (เก็บข้อมูล sensor)
-  #  UI / API : localhost:8086
-  # ════════════════════════════════════════════════════════
-  influxdb:
-    image: influxdb:2
-    container_name: influxdb
-    ports:
-      - "8086:8086"
-    volumes:
-      - influxdb_data:/var/lib/influxdb2
-    environment:
-      - DOCKER_INFLUXDB_INIT_MODE=setup
-      - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUXDB_USERNAME}
-      - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUXDB_PASSWORD}
-      - DOCKER_INFLUXDB_INIT_ORG=${INFLUXDB_ORG}
-      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUXDB_BUCKET}
-      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_TOKEN}
-    restart: unless-stopped
-    networks:
-      - iot_network
-    healthcheck:
-      test: ["CMD", "influx", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-
-  # ════════════════════════════════════════════════════════
-  #  Grafana — Dashboard & Visualization
-  #  UI : localhost:3000
-  # ════════════════════════════════════════════════════════
-  grafana:
-    image: grafana/grafana:latest
-    container_name: grafana
-    ports:
-      - "3000:3000"
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
-    environment:
-      - TZ=${TZ}
-      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
-      - GF_USERS_ALLOW_SIGN_UP=false
-      - GF_SERVER_ROOT_URL=%(protocol)s://%(domain)s:%(http_port)s/
-      - INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
-      - INFLUXDB_ORG=${INFLUXDB_ORG}
-      - INFLUXDB_BUCKET=${INFLUXDB_BUCKET}
-    restart: unless-stopped
-    depends_on:
-      influxdb:
-        condition: service_healthy
-    networks:
-      - iot_network
 
   # ════════════════════════════════════════════════════════
   #  Mosquitto — Local MQTT Broker
@@ -82,7 +25,7 @@ services:
       retries: 3
 
   # ════════════════════════════════════════════════════════
-  #  Node-RED — OPC-UA Reader + MQTT Publisher
+  #  Node-RED — Flow-based automation
   #  UI : http://localhost:1880
   # ════════════════════════════════════════════════════════
   nodered:
@@ -136,7 +79,6 @@ services:
     networks:
       - iot_network
 
-
   # ════════════════════════════════════════════════════════
   #  Ngrok — Tunnel N8N to the internet
   #  Dashboard : http://localhost:4040
@@ -167,5 +109,3 @@ volumes:
   n8n_data:
   mosquitto_data:
   mosquitto_log:
-  influxdb_data:
-  grafana_data:

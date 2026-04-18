@@ -1,22 +1,23 @@
 # ESP32 SmartFarm — MQTT Telemetry Firmware
 
-> PlatformIO project สำหรับ Node-RED Lab 1  
-> ส่งข้อมูล sensor ไปยัง MQTT Broker ทุก 5 วินาที
+> PlatformIO project สำหรับส่งข้อมูล sensor ไปยัง MQTT Broker ทุก 5 วินาที
+>
+> **Temperature sensor:** DS18B20 บน GPIO14 (OneWire)
+> ถ้าไม่ต่อ sensor — สุ่มค่าอัตโนมัติ (ไม่ต้อง config อะไร)
 
 ---
 
 ## โครงสร้างไฟล์
 
 ```
-esp32-firmware/
+esp32-firmware-NodeRED/
   ├── platformio.ini          ← Project config + dependencies
   ├── include/
   │     └── config.h          ← ★ แก้ WiFi / MQTT / Pins ที่นี่
   ├── src/
   │     └── main.cpp          ← Main firmware
-  ├── test/
-  │     └── test_payload.py   ← Python simulator (ไม่ต้องใช้ ESP32)
-  └── .gitignore
+  └── test/
+        └── test_payload.py   ← Python simulator (ไม่ต้องใช้ ESP32)
 ```
 
 ---
@@ -32,10 +33,10 @@ esp32-firmware/
 ## ขั้นตอนที่ 2 — เปิด Project
 
 ```
-File → Open Folder → เลือก d:\NodeRed\esp32-firmware
+File → Open Folder → เลือก d:\NodeRed\esp32-firmware-NodeRED
 ```
 
-PlatformIO จะตรวจพบ `platformio.ini` อัตโนมัติ
+PlatformIO จะตรวจพบ `platformio.ini` อัตโนมัติและดาวน์โหลด libraries
 
 ---
 
@@ -49,17 +50,16 @@ PlatformIO จะตรวจพบ `platformio.ini` อัตโนมัติ
 #define WIFI_PASSWORD   "รหัส WiFi ของคุณ"
 
 // MQTT Broker — เลือก 1 ตัว
-// ตัวเลือก A: HiveMQ Public (ไม่ต้องตั้งค่าอะไร)
-#define MQTT_HOST   "broker.hivemq.com"
+// ตัวเลือก A: Local Mosquitto บน Windows (แนะนำ)
+#define MQTT_HOST   "192.168.x.x"  // IP เครื่อง Windows ที่รัน Docker
 
-// ตัวเลือก B: Local Mosquitto บน Windows
-// #define MQTT_HOST   "192.168.x.x"  ← IP เครื่อง Windows ที่รัน Docker
+// ตัวเลือก B: HiveMQ Public (ทดสอบโดยไม่ต้องมี server เอง)
+// #define MQTT_HOST   "broker.hivemq.com"
 ```
 
 ### หา IP Windows สำหรับ Mosquitto Local
 
 ```powershell
-# PowerShell
 ipconfig | findstr "IPv4"
 ```
 
@@ -77,6 +77,38 @@ Ctrl+Alt+U   หรือ คลิก → ที่ Status Bar
 # เปิด Serial Monitor ดู log
 Ctrl+Alt+S   หรือ คลิก 🔌 ที่ Status Bar
 ```
+
+---
+
+## Pin Map
+
+| GPIO | บทบาท | หมายเหตุ |
+|------|-------|---------|
+| 14 | DS18B20 Data (OneWire) | ต้องใช้ pull-up 4.7kΩ ไป 3.3V |
+| 26 | Relay Output | Active HIGH |
+| 2  | LED_BUILTIN | กระพริบเมื่อส่งข้อมูล |
+
+### วงจร DS18B20
+
+```
+DS18B20 VCC  → 3.3V
+DS18B20 GND  → GND
+DS18B20 DATA → GPIO14 + ตัวต้านทาน 4.7kΩ ระหว่าง DATA และ 3.3V
+```
+
+---
+
+## Sensor Auto-Detection
+
+Firmware ตรวจสอบ DS18B20 ตอน boot อัตโนมัติ:
+
+| สถานะ | ผล |
+|-------|-----|
+| พบ DS18B20 | อ่านค่าอุณหภูมิจริงจาก sensor |
+| ไม่พบ DS18B20 | สุ่มค่า temperature แบบ random walk (18–40°C) |
+| Disconnect ระหว่างรัน | สลับเป็น simulated อัตโนมัติ |
+
+Humidity และ Soil Moisture เป็น simulated เสมอ (DS18B20 วัดได้เฉพาะ temperature)
 
 ---
 
@@ -98,39 +130,31 @@ Ctrl+Alt+S   หรือ คลิก 🔌 ที่ Status Bar
     "humidity": 65.2,
     "soil_moisture": 42,
     "relay": 0,
-    "rssi": -68
+    "rssi": -68,
+    "sensor": "ds18b20"
 }
 ```
+
+> field `"sensor"` จะเป็น `"ds18b20"` หรือ `"simulated"` — บอกสถานะว่าค่า temperature มาจากที่ไหน
 
 ### ตัวอย่าง Command — ควบคุม Relay
 
 ```bash
-# เปิด relay
-mosquitto_pub -h broker.hivemq.com \
+# เปิด relay (ผ่าน Local Mosquitto)
+docker exec mosquitto mosquitto_pub \
     -t "smartfarm/ESP32-FARM-001/command" \
     -m '{"relay":1}'
 
 # ปิด relay
-mosquitto_pub -h broker.hivemq.com \
+docker exec mosquitto mosquitto_pub \
     -t "smartfarm/ESP32-FARM-001/command" \
     -m '{"relay":0}'
 
 # Restart ESP32
-mosquitto_pub -h broker.hivemq.com \
+docker exec mosquitto mosquitto_pub \
     -t "smartfarm/ESP32-FARM-001/command" \
     -m '{"restart":true}'
 ```
-
----
-
-## Pin Map
-
-| GPIO | Role | หมายเหตุ |
-|------|------|---------|
-| 4    | DHT22 Data | ใช้เมื่อ SIMULATE_SENSORS=0 |
-| 26   | Relay Output | Active HIGH |
-| 34   | Soil Moisture ADC | ใช้เมื่อ SIMULATE_SENSORS=0 |
-| 2    | LED_BUILTIN | กระพริบเมื่อส่งข้อมูล |
 
 ---
 
@@ -140,11 +164,11 @@ mosquitto_pub -h broker.hivemq.com \
 # ติดตั้ง dependency
 pip install paho-mqtt
 
-# ส่งข้อมูลไปยัง HiveMQ Public
-python test/test_payload.py
-
-# ส่งไปยัง Local Mosquitto
+# ส่งข้อมูลไปยัง Local Mosquitto
 python test/test_payload.py --broker 192.168.1.100
+
+# ส่งไปยัง HiveMQ Public
+python test/test_payload.py
 
 # จำลองหลาย device
 python test/test_payload.py --device ESP32-FARM-002
@@ -155,40 +179,29 @@ python test/test_payload.py --count 30 --interval 2
 
 ---
 
-## Modes
-
-| ค่า `SIMULATE_SENSORS` | ผล |
-|------------------------|-----|
-| `1` (default) | ค่า sensor จำลองสุ่มแบบ random walk — ไม่ต้องต่อ hardware |
-| `0` | อ่านจาก DHT22 จริง + Soil Moisture sensor จริง |
-
----
-
 ## Serial Output ตัวอย่าง
 
+**กรณีต่อ DS18B20:**
 ```
 ================================================
   ESP32 SmartFarm — MQTT Telemetry
 ================================================
   Device   : ESP32-FARM-001
-  Broker   : broker.hivemq.com:1883
-  Telemetry: smartfarm/ESP32-FARM-001/telemetry
-  Command  : smartfarm/ESP32-FARM-001/command
-  Interval : 5000 ms
-  Mode     : SIMULATE (no physical sensor needed)
+  Broker   : 192.168.1.121:1883
+  DS18B20  : GPIO14
+  Sensor   : DS18B20 CONNECTED
 ================================================
 
-[WiFi] Connecting to: MyWiFi
-..
-[WiFi] Connected!
-       SSID : MyWiFi
-       IP   : 192.168.1.105
-       RSSI : -52 dBm
-[MQTT] Connecting to broker.hivemq.com:1883 as ESP32-FARM-001-aabbcc
+[WiFi] IP: 192.168.1.105  RSSI: -52 dBm
 [MQTT] Connected!
-[MQTT] Subscribed: smartfarm/ESP32-FARM-001/command
-[PUB] Status: {"device":"ESP32-FARM-001","state":"online","ip":"192.168.1.105","rssi":-52,"uptime_s":3}
-[PUB] smartfarm/ESP32-FARM-001/telemetry → {"device":"ESP32-FARM-001","temperature":28.5,"humidity":65.2,...} (148 bytes)
+[PUB] {"device":"ESP32-FARM-001","temperature":28.5,"sensor":"ds18b20",...}
+```
+
+**กรณีไม่ต่อ sensor:**
+```
+  Sensor   : NOT FOUND — using simulated values
+
+[PUB] {"device":"ESP32-FARM-001","temperature":30.1,"sensor":"simulated",...}
 ```
 
 ---
@@ -199,6 +212,7 @@ python test/test_payload.py --count 30 --interval 2
 |-------|---------|
 | Upload ไม่ได้ — `No device found` | กด **BOOT button** ค้างไว้ขณะ upload แล้วปล่อย |
 | WiFi ไม่ต่อ — restart loop | ตรวจ SSID/Password ใน config.h |
-| MQTT ไม่ต่อ rc=-2 | ตรวจ MQTT_HOST — ถ้าใช้ local ใส่ IP จริงของ host |
+| MQTT ไม่ต่อ rc=-2 | ตรวจ MQTT_HOST — ใส่ IP จริงของ host ไม่ใช่ localhost |
 | ข้อมูลไม่ถึง Node-RED | ตรวจ topic ให้ตรงกัน ทั้ง ESP32 และ MQTT In node |
-| Build error: `DHT.h not found` | PlatformIO ติดตั้ง lib ไม่ครบ — ลอง `pio pkg install` |
+| temperature = -127 | DS18B20 ไม่ต่อหรือ wiring ผิด — firmware จะสลับเป็น simulated เอง |
+| temperature ผิดปกติ | ตรวจ pull-up resistor 4.7kΩ ระหว่าง DATA และ 3.3V |

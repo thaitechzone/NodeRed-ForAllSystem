@@ -1,4 +1,4 @@
-# คู่มือติดตั้ง Node-RED + N8N + MQTT + Grafana + InfluxDB + ngrok (Docker)
+# คู่มือติดตั้ง Node-RED + N8N + MQTT + ngrok (Docker)
 
 > Platform: Windows 11 Pro | Working dir: `d:\NodeRed`
 
@@ -8,11 +8,11 @@
 
 | รายการ | ตรวจสอบ |
 |--------|---------|
-| Docker Desktop สำหรับ Windows | [https://www.docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop) |
+| Docker Desktop สำหรับ Windows | https://www.docker.com/products/docker-desktop |
 | WSL2 | Docker Desktop จะติดตั้งให้อัตโนมัติ |
-| บัญชี ngrok (ฟรี) | [https://dashboard.ngrok.com/signup](https://dashboard.ngrok.com/signup) |
-| RAM | แนะนำ 8 GB ขึ้นไป |
-| Disk ว่าง | 5 GB ขึ้นไป |
+| บัญชี ngrok (ฟรี) | https://dashboard.ngrok.com/signup |
+| RAM | แนะนำ 4 GB ขึ้นไป |
+| Disk ว่าง | 3 GB ขึ้นไป |
 
 > **ไม่ต้องติดตั้ง ngrok ในเครื่อง** — ใช้ Docker image แทน
 
@@ -58,7 +58,7 @@ d:\NodeRed\
 
 ### 3.1 สมัครบัญชี ngrok (ฟรี)
 
-ไปที่ [https://dashboard.ngrok.com/signup](https://dashboard.ngrok.com/signup)
+ไปที่ https://dashboard.ngrok.com/signup
 
 ### 3.2 สร้าง Static Domain (ฟรี 1 domain)
 
@@ -70,7 +70,7 @@ d:\NodeRed\
 
 ### 3.3 คัดลอก Authtoken
 
-ไปที่ [https://dashboard.ngrok.com/get-started/your-authtoken](https://dashboard.ngrok.com/get-started/your-authtoken)  
+ไปที่ https://dashboard.ngrok.com/get-started/your-authtoken
 คัดลอก token ยาว (ประมาณ 48 ตัวอักษร)
 
 ---
@@ -84,17 +84,13 @@ d:\NodeRed\
 TZ=Asia/Bangkok
 
 # ─── Ngrok ───────────────────────────────────────────────
-# Authtoken จาก https://dashboard.ngrok.com/get-started/your-authtoken
 NGROK_AUTHTOKEN=ใส่-authtoken-ที่-copy-มา
-
-# Static domain (ไม่ต้องมี https://)
-NGROK_DOMAIN=your-name-abc.ngrok-free.dev
-NGROK_URL=https://your-name-abc.ngrok-free.dev
+NGROK_DOMAIN=your-name-abc.ngrok-free.dev       # ไม่ต้องมี https://
+NGROK_URL=https://your-name-abc.ngrok-free.dev  # มี https://
 
 # ─── N8N ─────────────────────────────────────────────────
-# Key สำหรับเข้ารหัส credentials ใน N8N (ต้องเปลี่ยน — random string 32+ ตัว)
 # สร้างด้วย: node -e "console.log(require('crypto').randomBytes(16).toString('hex'))"
-N8N_ENCRYPTION_KEY=MySecretKey1234567890AbCdEfGhIj
+N8N_ENCRYPTION_KEY=random-32-char-string
 
 # ─── Node-RED Admin Auth ─────────────────────────────────
 # สร้าง hash ดูขั้นตอนที่ 5
@@ -105,59 +101,15 @@ NR_ADMIN_PASSWORD_HASH=$2b$08$REPLACE_THIS_WITH_REAL_HASH
 # IP ของเครื่องที่รัน OPC Server (ไม่ใช่ localhost เพราะ Node-RED อยู่ใน Docker)
 OPC_SERVER_IP=192.168.1.100
 OPC_SERVER_PORT=4840
-
-# ─── InfluxDB ────────────────────────────────────────────
-INFLUXDB_ORG=iot
-INFLUXDB_BUCKET=sensors
-INFLUXDB_USERNAME=admin
-INFLUXDB_PASSWORD=ChangeMe1234!
-INFLUXDB_TOKEN=ใส่-token-ที่-generate-ได้จากขั้นตอนด้านล่าง
-
-# ─── Grafana ─────────────────────────────────────────────
-GRAFANA_ADMIN_USER=admin
-GRAFANA_ADMIN_PASSWORD=ChangeMe1234!
 ```
 
 > หา `OPC_SERVER_IP`: เปิด CMD แล้วพิมพ์ `ipconfig` ดูที่ IPv4 Address
-
-### 4.1 Generate INFLUXDB_TOKEN
-
-เลือกวิธีที่มีในเครื่องได้เลย:
-
-**วิธีที่ 1 — Node.js (แนะนำ)**
-```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-```
-
-**วิธีที่ 2 — PowerShell (ไม่ต้องติดตั้งอะไรเพิ่ม)**
-```powershell
--join ((1..64) | ForEach-Object { '{0:x}' -f (Get-Random -Max 16) })
-```
-
-**วิธีที่ 3 — Docker (ถ้ายังไม่มี Node.js)**
-```bash
-docker run --rm alpine sh -c "cat /dev/urandom | tr -dc 'a-f0-9' | head -c 64"
-```
-
-ผลลัพธ์ที่ได้ (ตัวอย่าง):
-```
-a3f8c2d1e4b5a6f7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1
-```
-
-นำผลลัพธ์ไปใส่ใน `.env`:
-```env
-INFLUXDB_TOKEN=a3f8c2d1e4b5a6f7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1
-```
-
-> token ต้องยาว 64 ตัวอักษร (a-f และ 0-9) — ไม่ควรใช้ค่า default เพราะจะทำให้ระบบไม่ปลอดภัย
 
 ---
 
 ## ขั้นตอนที่ 5 — ตั้งค่า Node-RED Admin Login
 
 ### 5.1 สร้าง Password Hash
-
-เลือกวิธีใดวิธีหนึ่ง:
 
 **วิธีที่ 1 — Docker (แนะนำ ไม่ต้องติดตั้งอะไรเพิ่ม)**
 ```bash
@@ -169,13 +121,7 @@ docker run --rm -it nodered/node-red node-red-admin hash-pw
 npx node-red-admin hash-pw
 ```
 
-**วิธีที่ 3 — Docker (หลัง compose up แล้ว)**
-```bash
-docker exec -it nodered node-red-admin hash-pw
-```
-
-ทุกวิธีจะถาม: `Password:` → พิมพ์ password แล้วกด Enter  
-ได้ผลลัพธ์เช่น:
+พิมพ์ password แล้วกด Enter — ได้ผลลัพธ์เช่น:
 ```
 $2b$08$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ01234
 ```
@@ -196,7 +142,7 @@ NR_ADMIN_PASSWORD_HASH=$2b$08$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ01
 ```bash
 cd d:\NodeRed
 
-# Pull images ทั้งหมด (mosquitto, nodered, n8n, ngrok)
+# Pull images ทั้งหมด
 docker compose pull
 
 # Start ทุก service พร้อมกัน
@@ -223,30 +169,23 @@ docker logs ngrok
 ```
 ควรเห็น: `started tunnel` และ URL ของ domain
 
-หรือเปิด [http://localhost:4040](http://localhost:4040) — ถ้าเห็น dashboard แสดงว่า tunnel พร้อม
-
 ---
 
 ## ขั้นตอนที่ 7 — ทดสอบเข้าใช้งาน
 
 | Service | URL | Login |
 |---------|-----|-------|
-| Node-RED | http://localhost:1880 | ใช้ username/password จาก `.env` |
+| Node-RED | http://localhost:1880 | username/password จาก `.env` |
 | N8N (local) | http://localhost:5678 | สร้าง account ครั้งแรก |
 | N8N (public) | `https://your-domain.ngrok-free.dev` | เดียวกับ local |
 | ngrok Dashboard | http://localhost:4040 | ไม่ต้อง login |
-| **InfluxDB** | **http://localhost:8086** | **ใช้ INFLUXDB_USERNAME/PASSWORD จาก `.env`** |
-| **Grafana** | **http://localhost:3000** | **ใช้ GRAFANA_ADMIN_USER/PASSWORD จาก `.env`** |
 
 ---
 
 ## ขั้นตอนที่ 8 — ติดตั้ง OPC-UA Node ใน Node-RED
 
 ```bash
-# ติดตั้ง node
 docker exec nodered npm install node-red-contrib-opcua --prefix /data
-
-# Restart เพื่อโหลด node ใหม่
 docker restart nodered
 ```
 
@@ -256,7 +195,7 @@ docker restart nodered
 
 ## ขั้นตอนที่ 9 — ตั้งค่า MQTT Credential ใน N8N
 
-1. เปิด [http://localhost:5678](http://localhost:5678) → สร้างบัญชี Admin
+1. เปิด http://localhost:5678 → สร้างบัญชี Admin
 2. Settings → Credentials → **Add Credential**
 3. ค้นหา `MQTT` → เลือก **MQTT**
 4. กรอก:
@@ -266,113 +205,15 @@ docker restart nodered
 
 ---
 
-## ขั้นตอนที่ 10 — เชื่อม Node-RED กับ InfluxDB
-
-### 10.1 ติดตั้ง node-red-contrib-influxdb
-
-**วิธีที่ 1 — Command Line (แนะนำ)**
-
-```bash
-# ติดตั้ง package เข้า container
-docker exec nodered npm install node-red-contrib-influxdb --prefix /data
-
-# Restart เพื่อโหลด node ใหม่
-docker restart nodered
-```
-
-ตรวจสอบว่าติดตั้งสำเร็จ:
-```bash
-docker exec nodered npm list --prefix /data node-red-contrib-influxdb
-```
-
-ผลลัพธ์ที่ควรเห็น:
-```
-/data
-└── node-red-contrib-influxdb@x.x.x
-```
-
-**วิธีที่ 2 — ผ่าน Node-RED UI**
-
-1. เปิด http://localhost:1880
-2. ☰ Menu → **Manage palette** → แท็บ **Install**
-3. ค้นหา `node-red-contrib-influxdb`
-4. กด **Install** → รอจนขึ้น "Nodes added"
-5. Node-RED จะ restart อัตโนมัติ
-
-หลังติดตั้งสำเร็จ ใน palette ด้านซ้ายจะมี node กลุ่ม **storage** เพิ่มขึ้นมา:
-- `influxdb in` — อ่านข้อมูลจาก InfluxDB
-- `influxdb out` — เขียนข้อมูลเข้า InfluxDB
-- `influxdb batch` — เขียนข้อมูลแบบ batch
-
-### 10.2 สร้าง Flow ส่งข้อมูลเข้า InfluxDB
-
-ตัวอย่าง Flow: MQTT → แปลงข้อมูล → InfluxDB
-
-```
-[MQTT In] → [Function] → [InfluxDB Out]
-topic: sensors/#    แปลง payload   host: influxdb
-                                    port: 8086
-                                    token: (จาก .env)
-                                    org: iot
-                                    bucket: sensors
-```
-
-ตัวอย่าง Function node แปลงข้อมูล MQTT → InfluxDB format:
-```javascript
-// รับ payload จาก ESP32: {"temperature":28.5,"humidity":65}
-const data = JSON.parse(msg.payload);
-const device = msg.topic.split("/")[1] || "unknown";
-
-msg.payload = [
-    {
-        measurement: "environment",
-        tags: { device: device },
-        fields: {
-            temperature: data.temperature,
-            humidity: data.humidity
-        }
-    }
-];
-return msg;
-```
-
-### 10.3 ตรวจสอบข้อมูลใน InfluxDB
-
-1. เปิด http://localhost:8086
-2. Login ด้วย `INFLUXDB_USERNAME` / `INFLUXDB_PASSWORD`
-3. ไปที่ **Data Explorer** → เลือก bucket `sensors`
-4. ถ้าเห็นข้อมูล = Node-RED ส่งเข้า InfluxDB สำเร็จ
-
-### 10.4 สร้าง Dashboard ใน Grafana
-
-1. เปิด http://localhost:3000
-2. Login ด้วย `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD`
-3. Datasource **InfluxDB** จะถูกตั้งค่าอัตโนมัติแล้ว (via provisioning)
-4. **Dashboards** → **New** → **New Dashboard** → **Add visualization**
-5. เลือก datasource: **InfluxDB**
-6. ตัวอย่าง Flux query แสดง temperature:
-
-```flux
-from(bucket: "sensors")
-  |> range(start: -1h)
-  |> filter(fn: (r) => r._measurement == "environment")
-  |> filter(fn: (r) => r._field == "temperature")
-```
-
----
-
-## ขั้นตอนที่ 11 — Setup Google OAuth2 (Gmail / Google Drive)
+## ขั้นตอนที่ 10 — Setup Google OAuth2 (Gmail / Google Drive)
 
 > ข้ามขั้นตอนนี้ถ้ายังไม่ต้องการ Gmail / Google Drive
 
 ### 10.1 สร้าง Google Cloud Project
 
-1. ไปที่ [https://console.cloud.google.com](https://console.cloud.google.com)
-2. สร้าง Project ใหม่ (หรือใช้ที่มีอยู่)
-3. Enable APIs:
-   - **Gmail API** → APIs & Services → Library → ค้น "Gmail API" → Enable
-   - **Google Drive API** → ค้น "Google Drive API" → Enable
-   - **Generative Language API** → ค้น "Generative Language API" → Enable
+1. ไปที่ https://console.cloud.google.com
+2. สร้าง Project ใหม่
+3. Enable APIs: **Gmail API**, **Google Drive API**, **Generative Language API**
 
 ### 10.2 สร้าง OAuth2 Client ID
 
@@ -382,7 +223,6 @@ from(bucket: "sensors")
    ```
    https://your-domain.ngrok-free.dev/rest/oauth2-credential/callback
    ```
-   > เปลี่ยน `your-domain.ngrok-free.dev` เป็นค่า `NGROK_DOMAIN` ใน `.env` ของคุณ
 4. Save → เก็บ `Client ID` และ `Client Secret`
 
 ### 10.3 เพิ่ม Credentials ใน N8N
@@ -391,14 +231,12 @@ from(bucket: "sensors")
 
 1. เปิด `https://your-domain.ngrok-free.dev`
 2. Settings → Credentials → Add Credential
-3. Gmail: เลือก **Gmail OAuth2 API** → ใส่ Client ID + Secret → **Connect**
-4. Drive: เลือก **Google Drive OAuth2 API** → ใส่ Client ID + Secret → **Connect**
-5. หน้าต่าง Google Login จะเปิดขึ้น → Allow
-6. สถานะเป็น **Connected** = สำเร็จ
+3. Gmail: **Gmail OAuth2 API** → ใส่ Client ID + Secret → **Connect**
+4. Drive: **Google Drive OAuth2 API** → ใส่ Client ID + Secret → **Connect**
 
 ### 10.4 Gemini API Key
 
-1. สร้าง API Key ที่ [https://aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)
+1. สร้าง API Key ที่ https://aistudio.google.com/app/apikey
 2. N8N: Settings → Credentials → New → **Google Gemini(PaLM) Api** → วาง Key
 
 ---
@@ -406,11 +244,13 @@ from(bucket: "sensors")
 ## ขั้นตอนที่ 11 — ทดสอบ MQTT
 
 ```bash
-# Subscribe ดูข้อมูลทุก topic ใต้ plc/
-docker exec -it mosquitto mosquitto_sub -t "plc/#" -v
+# Subscribe ดูข้อมูลทุก topic
+docker exec -it mosquitto mosquitto_sub -t "smartfarm/#" -v
 
 # เปิด terminal ใหม่ แล้ว publish ทดสอบ
-docker exec mosquitto mosquitto_pub -t "plc/data/temperature" -m "{\"value\":75.5,\"unit\":\"C\"}"
+docker exec mosquitto mosquitto_pub \
+    -t "smartfarm/ESP32-FARM-001/telemetry" \
+    -m '{"device":"ESP32-FARM-001","temperature":28.5,"humidity":65.2}'
 ```
 
 หรือใช้ GUI: [MQTT Explorer](https://mqtt-explorer.com) → เชื่อมที่ `localhost:1883`
@@ -423,10 +263,8 @@ docker exec mosquitto mosquitto_pub -t "plc/data/temperature" -m "{\"value\":75.
 # ดู status ทุก service
 docker compose ps
 
-# ดู logs ทั้งหมด
+# ดู logs
 docker compose logs -f
-
-# ดู log เฉพาะ service
 docker compose logs -f ngrok
 docker compose logs -f n8n
 docker compose logs -f nodered
@@ -459,18 +297,15 @@ docker stats
 ### ติดตั้งครั้งแรก
 - [ ] ติดตั้ง Docker Desktop + WSL2
 - [ ] สมัครบัญชี ngrok + สร้าง Static Domain
-- [ ] แก้ไข `.env` — ใส่ `NGROK_AUTHTOKEN`, `NGROK_DOMAIN`, `NGROK_URL`, `OPC_SERVER_IP`, `N8N_ENCRYPTION_KEY`
-- [ ] แก้ไข `.env` — ตั้งค่า `INFLUXDB_TOKEN`, `INFLUXDB_PASSWORD`, `GRAFANA_ADMIN_PASSWORD`
+- [ ] แก้ไข `.env` — ใส่ `NGROK_AUTHTOKEN`, `NGROK_DOMAIN`, `NGROK_URL`
+- [ ] แก้ไข `.env` — ตั้งค่า `N8N_ENCRYPTION_KEY`, `OPC_SERVER_IP`
 - [ ] สร้าง bcrypt hash: `docker run --rm -it nodered/node-red node-red-admin hash-pw`
 - [ ] ใส่ hash ลงใน `.env` ที่ `NR_ADMIN_PASSWORD_HASH`
 - [ ] `docker compose pull` แล้ว `docker compose up -d`
 - [ ] ตรวจสอบ ngrok tunnel: `docker logs ngrok` หรือ http://localhost:4040
 - [ ] ทดสอบ login Node-RED ที่ http://localhost:1880
 - [ ] ทดสอบ login N8N ที่ http://localhost:5678
-- [ ] ทดสอบ login InfluxDB ที่ http://localhost:8086
-- [ ] ทดสอบ login Grafana ที่ http://localhost:3000
-- [ ] ติดตั้ง `node-red-contrib-opcua` ใน Node-RED
-- [ ] ติดตั้ง `node-red-contrib-influxdb` ใน Node-RED
+- [ ] ติดตั้ง `node-red-contrib-opcua` ใน Node-RED (ถ้าใช้ OPC-UA)
 - [ ] ตั้งค่า MQTT Credential ใน N8N (host: `mosquitto`, port: `1883`)
 
 ### Setup OAuth2 (Google Services)
@@ -481,11 +316,7 @@ docker stats
 
 ### ทดสอบ
 - [ ] MQTT: `mosquitto_pub` → `mosquitto_sub` → รับได้
-- [ ] Node-RED: OPC UA Client เชื่อม OPC Server ได้
-- [ ] Node-RED: InfluxDB Out node ส่งข้อมูลเข้า InfluxDB ได้
-- [ ] InfluxDB: Data Explorer เห็นข้อมูลใน bucket `sensors`
-- [ ] Grafana: Datasource InfluxDB status = OK (ตรวจที่ Connections → Data sources)
-- [ ] Grafana: สร้าง Dashboard แสดงกราฟ sensor ได้
+- [ ] Node-RED: OPC UA Client เชื่อม OPC Server ได้ (ถ้าใช้ OPC-UA)
 - [ ] N8N: MQTT Trigger รับข้อมูลจาก Node-RED ได้
 - [ ] N8N: Gmail / Drive OAuth2 status = Connected
 
@@ -504,7 +335,3 @@ docker stats
 | Node-RED ไม่โหลด OPC node | `docker restart nodered` แล้วรอ 30 วิ |
 | Port 1883 ถูกใช้งาน | `netstat -ano \| findstr :1883` หา PID แล้ว `taskkill /PID xxx /F` |
 | Docker ไม่ start | เปิด Docker Desktop ก่อนแล้วรอ engine พร้อม |
-| InfluxDB ไม่ start | ตรวจ `INFLUXDB_PASSWORD` ต้องยาว 8+ ตัวอักษร |
-| Grafana login ไม่ได้ | ลบ volume แล้วรันใหม่: `docker compose down -v && docker compose up -d` |
-| Grafana datasource error | ตรวจ `INFLUXDB_TOKEN` ใน `.env` ต้องตรงกับที่ตั้งไว้ |
-| ไม่เห็นข้อมูลใน Grafana | ตรวจ Node-RED flow — InfluxDB Out node ต้องตั้ง bucket/org ให้ตรง |
