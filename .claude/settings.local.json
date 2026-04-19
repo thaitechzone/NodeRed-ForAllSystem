@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c \"import sys,json; flows=json.load\\(sys.stdin\\); httpin=[n for n in flows if n.get\\('type'\\)=='http in']; resp=[n for n in flows if n.get\\('type'\\)=='http response']; print\\('HTTP IN nodes:'\\); [print\\(f'  {n[\\\\\"url\\\\\"]} id={n[\\\\\"id\\\\\"]}'\\) for n in httpin]; print\\('HTTP RESPONSE nodes:'\\); [print\\(f'  id={n[\\\\\"id\\\\\"]}'\\) for n in resp]\")",
+      "Bash(docker network *)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(k,v['IPv4Address']\\) for k,v in d[0]['Containers'].items\\(\\)]\")",
+      "Bash(findstr \"Name\\\\|IPv4\")",
+      "Bash(docker cp *)"
+    ]
+  }
+}

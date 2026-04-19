@@ -1,0 +1,189 @@
+{
+  "name": "Workflow 2 — AI Energy Analyzer (every 5 min)",
+  "nodes": [
+    {
+      "id": "wf2_schedule",
+      "name": "Every 5 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300],
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "*/5 * * * *" }]
+        }
+      }
+    },
+    {
+      "id": "wf2_sheets_read",
+      "name": "Read Energy Log Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [480, 300],
+      "parameters": {
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": { "__rl": true, "value": "YOUR_SPREADSHEET_ID", "mode": "id" },
+        "sheetName":  { "__rl": true, "value": "Energy_Log", "mode": "name" },
+        "filtersUI": {},
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": { "id": "", "name": "Google Sheets Account" }
+      }
+    },
+    {
+      "id": "wf2_code_stats",
+      "name": "Filter 5min + Calc Stats",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 300],
+      "parameters": {
+        "jsCode": "const rows = $input.all();\nconst now = new Date();\nconst fiveMinAgo = new Date(now.getTime() - 5 * 60 * 1000);\n\n// กรองเฉพาะ 5 นาทีล่าสุด (timestamp รองรับ +07:00)\nconst recent = rows.filter(r => {\n  const ts = new Date(r.json.timestamp);\n  return !isNaN(ts.getTime()) && ts >= fiveMinAgo;\n});\n\nif (recent.length === 0) {\n  return [{ json: { skip: true, reason: 'ไม่มีข้อมูลใน 5 นาทีที่ผ่านมา', count: 0 } }];\n}\n\nconst num  = v => parseFloat(v) || 0;\nconst avg  = arr => arr.reduce((a,b) => a+b, 0) / arr.length;\nconst max  = arr => Math.max(...arr);\nconst min  = arr => Math.min(...arr);\n\nconst powers   = recent.map(r => num(r.json.active_power_kw));\nconst reactive = recent.map(r => num(r.json.reactive_power_kvar));\nconst apparent = recent.map(r => num(r.json.apparent_power_kva));\nconst pfs      = recent.map(r => num(r.json.power_factor));\nconst loads    = recent.map(r => num(r.json.load_pct));\nconst currents = recent.map(r => num(r.json.current_max));\nconst rpms     = recent.map(r => num(r.json.motor_rpm));\nconst freqs    = recent.map(r => num(r.json.frequency_hz));\n\n// alarm_overcurrent เป็น boolean จาก sheet\nconst alarmCount = recent.filter(r =>\n  r.json.alarm_overcurrent === true ||\n  r.json.alarm_overcurrent === 'true' ||\n  r.json.alarm_overcurrent === 'TRUE'\n).length;\nconst spikeCount = recent.filter(r =>\n  r.json.spike_event === true ||\n  r.json.spike_event === 'true' ||\n  r.json.spike_event === 'TRUE'\n).length;\n\n// energy delta (kwh ช่วงนี้)\nconst energyFirst = num(recent[0].json.energy_today_kwh);\nconst energyLast  = num(recent[recent.length-1].json.energy_today_kwh);\nconst energyDelta = Number(Math.max(0, energyLast - energyFirst).toFixed(4));\n\nreturn [{\n  json: {\n    skip:             false,\n    machine_id:       recent[0].json.machine_id || 'MC-01',\n    count:            recent.length,\n    time_from:        recent[0].json.timestamp,\n    time_to:          recent[recent.length-1].json.timestamp,\n\n    power_avg_kw:     Number(avg(powers).toFixed(3)),\n    power_max_kw:     Number(max(powers).toFixed(3)),\n    power_min_kw:     Number(min(powers).toFixed(3)),\n\n    reactive_avg_kvar:Number(avg(reactive).toFixed(3)),\n    apparent_avg_kva: Number(avg(apparent).toFixed(3)),\n\n    pf_avg:           Number(avg(pfs).toFixed(3)),\n    pf_min:           Number(min(pfs).toFixed(3)),\n\n    load_avg_pct:     Number(avg(loads).toFixed(1)),\n    load_max_pct:     Number(max(loads).toFixed(1)),\n\n    current_avg_a:    Number(avg(currents).toFixed(2)),\n    current_max_a:    Number(max(currents).toFixed(2)),\n\n    rpm_avg:          Math.round(avg(rpms)),\n    freq_avg_hz:      Number(avg(freqs).toFixed(2)),\n\n    energy_delta_kwh: energyDelta,\n    alarm_count:      alarmCount,\n    spike_count:      spikeCount,\n    alarm_rate_pct:   Number((alarmCount / recent.length * 100).toFixed(1)),\n    spike_rate_pct:   Number((spikeCount  / recent.length * 100).toFixed(1))\n  }\n}];"
+      }
+    },
+    {
+      "id": "wf2_if_skip",
+      "name": "Has Data?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [960, 300],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [{
+            "id": "check_skip",
+            "leftValue": "={{ $json.skip }}",
+            "rightValue": false,
+            "operator": { "type": "boolean", "operation": "equals" }
+          }],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "wf2_code_prompt",
+      "name": "Build AI Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 200],
+      "parameters": {
+        "jsCode": "const s = $input.first().json;\n\nconst systemPrompt = `คุณเป็น AI วิศวกรพลังงานอุตสาหกรรม เชี่ยวชาญการวิเคราะห์ข้อมูล telemetry เครื่องจักรและให้คำแนะนำประหยัดพลังงาน\nตอบกลับเป็น JSON เท่านั้น ห้ามมี markdown หรือ code block`;\n\nconst userPrompt = `วิเคราะห์ข้อมูลพลังงานสรุป 5 นาทีของเครื่องจักร ${s.machine_id} แล้วตัดสินใจ\n\nสถิติช่วง ${s.time_from} ถึง ${s.time_to} (${s.count} readings)\n\n【กำลังไฟฟ้า】\n• Active Power  : เฉลี่ย ${s.power_avg_kw} kW | สูงสุด ${s.power_max_kw} kW | ต่ำสุด ${s.power_min_kw} kW\n• Reactive Power: เฉลี่ย ${s.reactive_avg_kvar} kVAr\n• Apparent Power: เฉลี่ย ${s.apparent_avg_kva} kVA\n• Power Factor  : เฉลี่ย ${s.pf_avg} | ต่ำสุด ${s.pf_min}\n• พลังงานใช้ไป : ${s.energy_delta_kwh} kWh\n\n【โหลดและกระแส】\n• Load     : เฉลี่ย ${s.load_avg_pct}% | สูงสุด ${s.load_max_pct}%\n• Current  : เฉลี่ย ${s.current_avg_a} A | สูงสุด ${s.current_max_a} A\n• Motor RPM: เฉลี่ย ${s.rpm_avg} rpm\n• Frequency: ${s.freq_avg_hz} Hz\n\n【เหตุการณ์ผิดปกติ】\n• Overcurrent Alarm: ${s.alarm_count} ครั้ง (${s.alarm_rate_pct}% ของเวลา)\n• Spike Event      : ${s.spike_count} ครั้ง (${s.spike_rate_pct}% ของเวลา)\n\nเกณฑ์ตัดสินใจ reduce_power = true:\n- power_avg > 7.5 kW หรือ power_max > 9.0 kW\n- load_avg > 75% หรือ load_max > 85%\n- pf_min < 0.88\n- alarm_count > 0 หรือ spike_count > 0\n- current_max > 18 A\n\nตอบ JSON เท่านั้น:\n{\"reduce_power\": boolean, \"reason\": \"สาเหตุ 1 ประโยค\", \"recommendation\": \"คำแนะนำปฏิบัติ\", \"risk_level\": \"low|medium|high\", \"summary\": \"สรุปสถานการณ์\"}`;\n\nreturn [{ json: { system_prompt: systemPrompt, user_prompt: userPrompt, stats: s } }];"
+      }
+    },
+    {
+      "id": "wf2_openrouter",
+      "name": "OpenRouter AI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1440, 200],
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type",   "value": "application/json" },
+            { "name": "HTTP-Referer",   "value": "http://localhost:1880" },
+            { "name": "X-Title",        "value": "NodeRED Energy Analyzer" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"google/gemini-2.0-flash-001\",\n  \"messages\": [\n    { \"role\": \"system\", \"content\": {{ JSON.stringify($json.system_prompt) }} },\n    { \"role\": \"user\",   \"content\": {{ JSON.stringify($json.user_prompt) }} }\n  ],\n  \"temperature\": 0.1,\n  \"max_tokens\": 512,\n  \"response_format\": { \"type\": \"json_object\" }\n}",
+        "options": { "timeout": 30000 }
+      },
+      "credentials": {
+        "httpBearerAuth": { "id": "", "name": "OpenRouter API Key" }
+      }
+    },
+    {
+      "id": "wf2_code_parse",
+      "name": "Parse AI Decision",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1680, 200],
+      "parameters": {
+        "jsCode": "const resp  = $input.first().json;\nconst stats = $('Build AI Prompt').first().json.stats;\n\nlet decision = {\n  reduce_power:   false,\n  reason:         'ไม่สามารถวิเคราะห์ได้',\n  recommendation: 'ตรวจสอบด้วยตนเอง',\n  risk_level:     'low',\n  summary:        '-'\n};\n\ntry {\n  // OpenRouter / OpenAI format: choices[0].message.content\n  const raw = resp.choices?.[0]?.message?.content || '';\n  const match = raw.match(/\\{[\\s\\S]*\\}/);\n  if (match) {\n    const parsed = JSON.parse(match[0]);\n    decision = {\n      reduce_power:   parsed.reduce_power === true,\n      reason:         parsed.reason         || '-',\n      recommendation: parsed.recommendation || '-',\n      risk_level:     (parsed.risk_level    || 'low').toLowerCase(),\n      summary:        parsed.summary        || '-'\n    };\n  }\n} catch (e) {\n  decision.reason = 'Parse error: ' + e.message;\n}\n\n// แนบ metadata\nconst used_model = resp.model || 'unknown';\nconst usage = resp.usage || {};\n\nreturn [{\n  json: {\n    ...decision,\n    machine_id:      stats.machine_id,\n    analyzed_at:     new Date(Date.now() + 7*60*60*1000).toISOString().replace('Z','+07:00'),\n    readings_count:  stats.count,\n    power_avg_kw:    stats.power_avg_kw,\n    power_max_kw:    stats.power_max_kw,\n    load_avg_pct:    stats.load_avg_pct,\n    load_max_pct:    stats.load_max_pct,\n    pf_min:          stats.pf_min,\n    alarm_count:     stats.alarm_count,\n    spike_count:     stats.spike_count,\n    energy_delta_kwh:stats.energy_delta_kwh,\n    ai_model:        used_model,\n    tokens_used:     usage.total_tokens || 0,\n    source:          'n8n-openrouter-5min'\n  }\n}];"
+      }
+    },
+    {
+      "id": "wf2_http_nodered",
+      "name": "Send Command to Node-RED",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1920, 200],
+      "parameters": {
+        "method": "POST",
+        "url": "http://nodered:1880/energy-command",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Content-Type", "value": "application/json" }]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": { "timeout": 8000 }
+      }
+    },
+    {
+      "id": "wf2_sheets_log",
+      "name": "Log Result to Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [2160, 200],
+      "parameters": {
+        "resource": "sheet",
+        "operation": "append",
+        "documentId": { "__rl": true, "value": "YOUR_SPREADSHEET_ID", "mode": "id" },
+        "sheetName":  { "__rl": true, "value": "Analysis_Log", "mode": "name" },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": [
+            { "id": "analyzed_at",      "displayName": "analyzed_at" },
+            { "id": "machine_id",       "displayName": "machine_id" },
+            { "id": "reduce_power",     "displayName": "reduce_power" },
+            { "id": "risk_level",       "displayName": "risk_level" },
+            { "id": "reason",           "displayName": "reason" },
+            { "id": "recommendation",   "displayName": "recommendation" },
+            { "id": "summary",          "displayName": "summary" },
+            { "id": "readings_count",   "displayName": "readings_count" },
+            { "id": "power_avg_kw",     "displayName": "power_avg_kw" },
+            { "id": "power_max_kw",     "displayName": "power_max_kw" },
+            { "id": "load_avg_pct",     "displayName": "load_avg_pct" },
+            { "id": "alarm_count",      "displayName": "alarm_count" },
+            { "id": "spike_count",      "displayName": "spike_count" },
+            { "id": "energy_delta_kwh", "displayName": "energy_delta_kwh" },
+            { "id": "ai_model",         "displayName": "ai_model" },
+            { "id": "tokens_used",      "displayName": "tokens_used" }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": { "id": "", "name": "Google Sheets Account" }
+      }
+    }
+  ],
+  "connections": {
+    "Every 5 Minutes":        { "main": [[{ "node": "Read Energy Log Sheet",   "type": "main", "index": 0 }]] },
+    "Read Energy Log Sheet":  { "main": [[{ "node": "Filter 5min + Calc Stats","type": "main", "index": 0 }]] },
+    "Filter 5min + Calc Stats":{ "main": [[{ "node": "Has Data?",              "type": "main", "index": 0 }]] },
+    "Has Data?":              { "main": [
+      [{ "node": "Build AI Prompt",         "type": "main", "index": 0 }],
+      []
+    ]},
+    "Build AI Prompt":        { "main": [[{ "node": "OpenRouter AI",           "type": "main", "index": 0 }]] },
+    "OpenRouter AI":          { "main": [[{ "node": "Parse AI Decision",       "type": "main", "index": 0 }]] },
+    "Parse AI Decision":      { "main": [[{ "node": "Send Command to Node-RED","type": "main", "index": 0 }]] },
+    "Send Command to Node-RED":{ "main": [[{ "node": "Log Result to Sheet",    "type": "main", "index": 0 }]] }
+  },
+  "active": true,
+  "settings": { "executionOrder": "v1", "saveManualExecutions": true },
+  "pinData": {},
+  "id": "energy-analyzer-wf2",
+  "tags": ["energy", "analyzer", "openrouter", "google-sheets"]
+}

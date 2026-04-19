@@ -1,0 +1,104 @@
+{
+  "name": "Workflow 1 — Energy Data Collector",
+  "nodes": [
+    {
+      "id": "wf1_webhook",
+      "name": "Receive from Node-RED",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "energy-machine-telemetry",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "energy-machine-telemetry",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "wf1_code_extract",
+      "name": "Extract Sheet Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 300],
+      "parameters": {
+        "jsCode": "const body = $input.first().json;\nconst d = body.data || body;\n\nconst maxCurrent = Math.max(\n  parseFloat(d.current_a?.l1) || 0,\n  parseFloat(d.current_a?.l2) || 0,\n  parseFloat(d.current_a?.l3) || 0\n);\n\nreturn [{\n  json: {\n    timestamp:        d.ts || new Date().toISOString(),\n    machine_id:       d.machine_id || 'MC-01',\n    active_power_kw:  d.active_power_kw,\n    power_factor:     d.power_factor,\n    load_pct:         d.load_pct,\n    current_max:      Number(maxCurrent.toFixed(2)),\n    current_l1:       d.current_a?.l1,\n    current_l2:       d.current_a?.l2,\n    current_l3:       d.current_a?.l3,\n    voltage_l1:       d.voltage_v?.l1,\n    alarm_overcurrent: d.alarm_overcurrent ? 'TRUE' : 'FALSE',\n    motor_rpm:        d.motor_rpm,\n    power_mode:       d.power_mode || 'NORMAL'\n  }\n}];"
+      }
+    },
+    {
+      "id": "wf1_sheets_append",
+      "name": "Append to Google Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [720, 300],
+      "parameters": {
+        "resource": "sheet",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_SPREADSHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Energy_Log",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": [
+            { "id": "timestamp",        "displayName": "timestamp" },
+            { "id": "machine_id",       "displayName": "machine_id" },
+            { "id": "active_power_kw",  "displayName": "active_power_kw" },
+            { "id": "power_factor",     "displayName": "power_factor" },
+            { "id": "load_pct",         "displayName": "load_pct" },
+            { "id": "current_max",      "displayName": "current_max" },
+            { "id": "current_l1",       "displayName": "current_l1" },
+            { "id": "current_l2",       "displayName": "current_l2" },
+            { "id": "current_l3",       "displayName": "current_l3" },
+            { "id": "voltage_l1",       "displayName": "voltage_l1" },
+            { "id": "alarm_overcurrent","displayName": "alarm_overcurrent" },
+            { "id": "motor_rpm",        "displayName": "motor_rpm" },
+            { "id": "power_mode",       "displayName": "power_mode" }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "",
+          "name": "Google Sheets Account"
+        }
+      }
+    },
+    {
+      "id": "wf1_respond",
+      "name": "Respond 200 OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [960, 300],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"status\":\"saved\",\"ts\":\"{{ $json.timestamp }}\"}",
+        "options": { "responseCode": 200 }
+      }
+    }
+  ],
+  "connections": {
+    "Receive from Node-RED": {
+      "main": [[{ "node": "Extract Sheet Row", "type": "main", "index": 0 }]]
+    },
+    "Extract Sheet Row": {
+      "main": [[{ "node": "Append to Google Sheet", "type": "main", "index": 0 }]]
+    },
+    "Append to Google Sheet": {
+      "main": [[{ "node": "Respond 200 OK", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": true,
+  "settings": { "executionOrder": "v1", "saveManualExecutions": false },
+  "pinData": {},
+  "id": "energy-collector-wf1",
+  "tags": ["energy", "collector", "google-sheets"]
+}

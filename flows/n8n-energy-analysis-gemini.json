@@ -1,0 +1,147 @@
+{
+  "name": "Energy Analysis - Gemini AI",
+  "nodes": [
+    {
+      "id": "n8n_webhook_01",
+      "name": "Receive Energy Telemetry",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "energy-machine-telemetry",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "energy-machine-telemetry",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "n8n_code_format_02",
+      "name": "Format Energy Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 300],
+      "parameters": {
+        "jsCode": "const body = $input.first().json;\nconst d = body.data || body;\n\nconst maxCurrent = Math.max(\n  d.current_a?.l1 || 0,\n  d.current_a?.l2 || 0,\n  d.current_a?.l3 || 0\n);\n\nconst prompt = `คุณเป็น AI ผู้เชี่ยวชาญด้านการจัดการพลังงานในโรงงานอุตสาหกรรม\nวิเคราะห์ข้อมูล telemetry ของเครื่องจักรและตัดสินใจว่าควรลดกำลังการทำงานหรือไม่\n\nข้อมูลเครื่องจักร:\n- Machine ID: ${d.machine_id}\n- Timestamp: ${d.ts}\n- Active Power: ${d.active_power_kw} kW\n- Apparent Power: ${d.apparent_power_kva} kVA\n- Power Factor: ${d.power_factor}\n- Load: ${d.load_pct}%\n- Max Current: ${maxCurrent.toFixed(2)} A  (L1:${d.current_a?.l1} / L2:${d.current_a?.l2} / L3:${d.current_a?.l3})\n- Voltage (L1/L2/L3): ${d.voltage_v?.l1}/${d.voltage_v?.l2}/${d.voltage_v?.l3} V\n- Frequency: ${d.frequency_hz} Hz\n- Motor RPM: ${d.motor_rpm}\n- Overcurrent Alarm: ${d.alarm_overcurrent}\n- Current Mode: ${d.power_mode || 'NORMAL'}\n\nเกณฑ์การตัดสินใจ:\n1. reduce_power = true  ถ้า: active_power_kw > 8.0 หรือ load_pct > 80 หรือ alarm_overcurrent = true หรือ power_factor < 0.88\n2. reduce_power = false ถ้า: ทุกค่าอยู่ในช่วงปกติ\n3. risk_level: \"high\" ถ้า overcurrent alarm หรือ power > 10 kW | \"medium\" ถ้า load > 70% หรือ pf < 0.90 | \"low\" อื่นๆ\n\nตอบกลับเป็น JSON ที่ valid เท่านั้น ห้ามมี markdown หรือคำอธิบาย:\n{\"reduce_power\": boolean, \"reason\": \"สาเหตุสั้นๆ\", \"recommendation\": \"คำแนะนำ\", \"risk_level\": \"low|medium|high\"}`;\n\nreturn [{ json: { prompt, original_data: body } }];"
+      }
+    },
+    {
+      "id": "n8n_llm_chain_03",
+      "name": "Analyze with Gemini",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [720, 300],
+      "parameters": {
+        "prompt": "={{ $json.prompt }}",
+        "messages": {
+          "messageValues": []
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "n8n_gemini_model_04",
+      "name": "Google Gemini",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [720, 480],
+      "parameters": {
+        "modelName": "gemini-2.0-flash",
+        "options": {
+          "temperature": 0.2,
+          "maxOutputTokens": 512
+        }
+      },
+      "credentials": {
+        "googleGeminiApi": {
+          "id": "",
+          "name": "Google Gemini API"
+        }
+      }
+    },
+    {
+      "id": "n8n_code_parse_05",
+      "name": "Parse AI Decision",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 300],
+      "parameters": {
+        "jsCode": "const llmOutput = $input.first().json;\nconst originalData = $('Format Energy Prompt').first().json.original_data;\nconst d = originalData.data || originalData;\n\nlet decision = {\n  reduce_power: false,\n  reason: 'ไม่สามารถวิเคราะห์ได้',\n  recommendation: 'ตรวจสอบด้วยตนเอง',\n  risk_level: 'low'\n};\n\ntry {\n  const rawText = llmOutput.text || '';\n  const jsonMatch = rawText.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    const parsed = JSON.parse(jsonMatch[0]);\n    decision = {\n      reduce_power: parsed.reduce_power === true,\n      reason: parsed.reason || '-',\n      recommendation: parsed.recommendation || '-',\n      risk_level: (parsed.risk_level || 'low').toLowerCase()\n    };\n  }\n} catch (e) {\n  decision.reason = 'Parse error: ' + e.message;\n}\n\nreturn [{\n  json: {\n    ...decision,\n    machine_id: d.machine_id || 'MC-01',\n    ts: d.ts || new Date().toISOString(),\n    active_power_kw: d.active_power_kw,\n    load_pct: d.load_pct,\n    power_factor: d.power_factor,\n    source: 'n8n-gemini-ai'\n  }\n}];"
+      }
+    },
+    {
+      "id": "n8n_http_nodered_06",
+      "name": "POST Command to Node-RED",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "http://nodered:1880/energy-command",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": { "timeout": 10000 }
+      }
+    },
+    {
+      "id": "n8n_respond_07",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1440, 300],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($('Parse AI Decision').first().json) }}",
+        "options": { "responseCode": 200 }
+      }
+    }
+  ],
+  "connections": {
+    "Receive Energy Telemetry": {
+      "main": [
+        [{ "node": "Format Energy Prompt", "type": "main", "index": 0 }]
+      ]
+    },
+    "Format Energy Prompt": {
+      "main": [
+        [{ "node": "Analyze with Gemini", "type": "main", "index": 0 }]
+      ]
+    },
+    "Google Gemini": {
+      "ai_languageModel": [
+        [{ "node": "Analyze with Gemini", "type": "ai_languageModel", "index": 0 }]
+      ]
+    },
+    "Analyze with Gemini": {
+      "main": [
+        [{ "node": "Parse AI Decision", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse AI Decision": {
+      "main": [
+        [{ "node": "POST Command to Node-RED", "type": "main", "index": 0 }]
+      ]
+    },
+    "POST Command to Node-RED": {
+      "main": [
+        [{ "node": "Respond to Webhook", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "pinData": {},
+  "id": "energy-analysis-gemini",
+  "tags": ["energy", "gemini", "node-red", "iot"]
+}
