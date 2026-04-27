@@ -1,0 +1,437 @@
+[
+    {
+        "id": "tab_fx3u_sim",
+        "type": "tab",
+        "label": "FX3U ModbusTCP Simulator",
+        "disabled": false,
+        "info": ""
+    },
+    {
+        "id": "ui_tab_energy",
+        "type": "ui_tab",
+        "name": "Energy Monitor",
+        "icon": "flash_on",
+        "disabled": false,
+        "hidden": false
+    },
+    {
+        "id": "grp_gauges",
+        "type": "ui_group",
+        "name": "Power Meters",
+        "tab": "ui_tab_energy",
+        "order": 1,
+        "disp": true,
+        "width": "12",
+        "collapse": false
+    },
+    {
+        "id": "grp_status",
+        "type": "ui_group",
+        "name": "Load Status",
+        "tab": "ui_tab_energy",
+        "order": 2,
+        "disp": true,
+        "width": "12",
+        "collapse": false
+    },
+    {
+        "id": "grp_chart",
+        "type": "ui_group",
+        "name": "Trend Chart",
+        "tab": "ui_tab_energy",
+        "order": 3,
+        "disp": true,
+        "width": "12",
+        "collapse": false
+    },
+    {
+        "id": "cfg_mbcli",
+        "type": "modbus-client",
+        "name": "FX3U-Sim localhost:1502",
+        "clienttype": "tcp",
+        "bufferCommands": true,
+        "stateLogEnabled": false,
+        "queueLogEnabled": false,
+        "failureLogEnabled": false,
+        "tcpHost": "127.0.0.1",
+        "tcpPort": "1502",
+        "tcpType": "DEFAULT",
+        "serialPort": "/dev/ttyUSB",
+        "serialType": "RTU-BUFFERED",
+        "serialBaudrate": "9600",
+        "serialDatabits": "8",
+        "serialStopbits": "1",
+        "serialParity": "none",
+        "serialConnectionDelay": 100,
+        "unit_id": "1",
+        "commandDelay": 200,
+        "clientTimeout": 5000,
+        "reconnectOnTimeout": true,
+        "reconnectTimeout": 5000,
+        "parallelUnitIdsAllowed": true
+    },
+    {
+        "id": "n_mbserver",
+        "type": "modbusServer",
+        "z": "tab_fx3u_sim",
+        "name": "FX3U Sim  TCP:1502",
+        "logEnabled": false,
+        "hostname": "0.0.0.0",
+        "serverPort": "1502",
+        "responseDelay": 100,
+        "delayUnit": "ms",
+        "unitId": 1,
+        "minAddress": 0,
+        "maxAddress": 65535,
+        "showErrors": false,
+        "x": 200,
+        "y": 700,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "n_timer",
+        "type": "inject",
+        "z": "tab_fx3u_sim",
+        "name": "2s Timer",
+        "props": [
+            {
+                "p": "payload",
+                "v": "",
+                "vt": "date"
+            }
+        ],
+        "repeat": "2",
+        "crontab": "",
+        "once": true,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 130,
+        "y": 200,
+        "wires": [
+            [
+                "n_sim"
+            ]
+        ]
+    },
+    {
+        "id": "n_sim",
+        "type": "function",
+        "z": "tab_fx3u_sim",
+        "name": "FX3U Energy Simulator",
+        "func": "// --- State ---\nvar ctx = context.get('sim');\nif (!ctx) {\n    ctx = { mode: 'normal', lastSwitch: Date.now(), interval: 30000 };\n    context.set('sim', ctx);\n}\n\nif (Date.now() - ctx.lastSwitch >= ctx.interval) {\n    ctx.mode = ctx.mode === 'normal' ? 'heavy' : 'normal';\n    ctx.lastSwitch = Date.now();\n    context.set('sim', ctx);\n}\n\nnode.status({\n    fill: ctx.mode === 'heavy' ? 'red' : 'green',\n    shape: 'dot',\n    text: ctx.mode === 'heavy' ? 'Heavy Load' : 'Normal Load'\n});\n\n// --- Profiles ---\nvar profiles = {\n    normal: { V: 220.0, I:  5.5,  F: 50.00, PF: 0.920 },\n    heavy:  { V: 213.5, I: 18.5,  F: 49.75, PF: 0.845 }\n};\nvar b = profiles[ctx.mode];\n\nfunction jitter(val, pct) {\n    return val * (1 + (Math.random() - 0.5) * 2 * pct);\n}\n\nvar V  = parseFloat(jitter(b.V,  0.005).toFixed(1));\nvar I  = parseFloat(jitter(b.I,  0.020).toFixed(2));\nvar F  = parseFloat(jitter(b.F,  0.002).toFixed(2));\nvar PF = parseFloat(Math.min(1.0, jitter(b.PF, 0.008)).toFixed(3));\nvar P  = Math.round(V * I * PF);\nvar S  = Math.round(V * I);\nvar Q  = Math.round(Math.sqrt(Math.max(0, S*S - P*P)));\n\n// --- FX3U D-Register -> Modbus HR ---\n// D0=HR0: Voltage x10    2200 = 220.0V\n// D1=HR1: Current x100    550 = 5.50A\n// D2=HR2: Freq x100      5000 = 50.00Hz\n// D3=HR3: ActivePower(W) 1117 = 1117W\n// D4=HR4: PF x1000        920 = 0.920\n// D5=HR5: LoadState(0/1)    1 = Heavy\nvar regs = [\n    Math.round(V  * 10),\n    Math.round(I  * 100),\n    Math.round(F  * 100),\n    P,\n    Math.round(PF * 1000),\n    ctx.mode === 'heavy' ? 1 : 0\n];\n\nvar data = {\n    voltage:       V,\n    current:       I,\n    frequency:     F,\n    activePower:   P,\n    reactivePower: Q,\n    apparentPower: S,\n    powerFactor:   PF,\n    mode:          ctx.mode,\n    registers:     regs,\n    timestamp:     new Date().toLocaleTimeString('th-TH')\n};\n\nreturn [\n    { payload: V    },\n    { payload: I    },\n    { payload: F    },\n    { payload: P    },\n    { payload: data }\n];",
+        "outputs": 5,
+        "noerr": 0,
+        "x": 340,
+        "y": 200,
+        "wires": [
+            [
+                "n_g_volt"
+            ],
+            [
+                "n_g_curr"
+            ],
+            [
+                "n_g_freq"
+            ],
+            [
+                "n_g_pwr"
+            ],
+            [
+                "n_fn_status",
+                "n_fn_chart",
+                "n_fn_modbus_prep",
+                "n_debug"
+            ]
+        ]
+    },
+    {
+        "id": "n_g_volt",
+        "type": "ui_gauge",
+        "z": "tab_fx3u_sim",
+        "name": "",
+        "group": "grp_gauges",
+        "order": 1,
+        "width": "3",
+        "height": "3",
+        "gtype": "gage",
+        "title": "Voltage",
+        "label": "V",
+        "format": "{{value}}",
+        "min": 190,
+        "max": 250,
+        "colors": [
+            "#00b500",
+            "#e6e600",
+            "#ca3838"
+        ],
+        "seg1": "207",
+        "seg2": "232",
+        "x": 590,
+        "y": 80,
+        "wires": []
+    },
+    {
+        "id": "n_g_curr",
+        "type": "ui_gauge",
+        "z": "tab_fx3u_sim",
+        "name": "",
+        "group": "grp_gauges",
+        "order": 2,
+        "width": "3",
+        "height": "3",
+        "gtype": "gage",
+        "title": "Current",
+        "label": "A",
+        "format": "{{value}}",
+        "min": 0,
+        "max": 25,
+        "colors": [
+            "#00b500",
+            "#e6e600",
+            "#ca3838"
+        ],
+        "seg1": "8",
+        "seg2": "16",
+        "x": 590,
+        "y": 150,
+        "wires": []
+    },
+    {
+        "id": "n_g_freq",
+        "type": "ui_gauge",
+        "z": "tab_fx3u_sim",
+        "name": "",
+        "group": "grp_gauges",
+        "order": 3,
+        "width": "3",
+        "height": "3",
+        "gtype": "gage",
+        "title": "Frequency",
+        "label": "Hz",
+        "format": "{{value}}",
+        "min": 48,
+        "max": 52,
+        "colors": [
+            "#00b500",
+            "#e6e600",
+            "#ca3838"
+        ],
+        "seg1": "49.5",
+        "seg2": "50.5",
+        "x": 590,
+        "y": 220,
+        "wires": []
+    },
+    {
+        "id": "n_g_pwr",
+        "type": "ui_gauge",
+        "z": "tab_fx3u_sim",
+        "name": "",
+        "group": "grp_gauges",
+        "order": 4,
+        "width": "3",
+        "height": "3",
+        "gtype": "gage",
+        "title": "Active Power",
+        "label": "W",
+        "format": "{{value}}",
+        "min": 0,
+        "max": 5000,
+        "colors": [
+            "#00b500",
+            "#e6e600",
+            "#ca3838"
+        ],
+        "seg1": "1500",
+        "seg2": "3500",
+        "x": 590,
+        "y": 290,
+        "wires": []
+    },
+    {
+        "id": "n_fn_status",
+        "type": "function",
+        "z": "tab_fx3u_sim",
+        "name": "Format Status",
+        "func": "var d = msg.payload;\nvar heavy = (d.mode === 'heavy');\nvar bg  = heavy ? '#ffebee' : '#e8f5e9';\nvar clr = heavy ? '#c62828' : '#2e7d32';\nvar lbl = heavy ? 'HEAVY LOAD' : 'NORMAL LOAD';\n\nmsg.payload =\n    '<div style=\"background:' + bg + ';padding:10px;border-radius:6px;\">' +\n    '<div style=\"font-size:1.3em;font-weight:bold;color:' + clr + ';margin-bottom:8px;\">' + lbl + '</div>' +\n    '<table style=\"width:100%;border-collapse:collapse;text-align:center;\">' +\n    '<tr style=\"background:#e3f2fd;\">' +\n    '<th style=\"padding:4px;\">Voltage</th><th>Current</th><th>Frequency</th><th>Active Power</th><th>PF</th>' +\n    '</tr>' +\n    '<tr style=\"font-size:1.5em;font-weight:bold;\">' +\n    '<td style=\"color:#1565c0;\">' + d.voltage + ' V</td>' +\n    '<td style=\"color:#e65100;\">' + d.current + ' A</td>' +\n    '<td style=\"color:#4a148c;\">' + d.frequency + ' Hz</td>' +\n    '<td style=\"color:#1b5e20;\">' + d.activePower + ' W</td>' +\n    '<td style=\"color:#33691e;\">' + d.powerFactor + '</td>' +\n    '</tr>' +\n    '</table>' +\n    '<div style=\"margin-top:6px;font-size:0.8em;color:#90a4ae;font-family:monospace;\">' +\n    'Modbus HR: D0=' + d.registers[0] +\n    ' D1=' + d.registers[1] +\n    ' D2=' + d.registers[2] +\n    ' D3=' + d.registers[3] +\n    ' D4=' + d.registers[4] +\n    ' D5=' + d.registers[5] +\n    '   ' + d.timestamp +\n    '</div></div>';\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "x": 580,
+        "y": 380,
+        "wires": [
+            [
+                "n_txt_status"
+            ]
+        ]
+    },
+    {
+        "id": "n_txt_status",
+        "type": "ui_text",
+        "z": "tab_fx3u_sim",
+        "group": "grp_status",
+        "order": 1,
+        "width": "12",
+        "height": "4",
+        "name": "",
+        "label": "",
+        "format": "{{{msg.payload}}}",
+        "layout": "row-left",
+        "x": 800,
+        "y": 380,
+        "wires": []
+    },
+    {
+        "id": "n_btn_switch",
+        "type": "ui_button",
+        "z": "tab_fx3u_sim",
+        "name": "",
+        "group": "grp_status",
+        "order": 2,
+        "width": "4",
+        "height": "1",
+        "passthru": false,
+        "label": "Switch Load Mode",
+        "tooltip": "Toggle Normal / Heavy Load",
+        "color": "white",
+        "bgcolor": "#1976d2",
+        "icon": "",
+        "payload": "switch",
+        "payloadType": "str",
+        "topic": "manual",
+        "topicType": "str",
+        "x": 150,
+        "y": 480,
+        "wires": [
+            [
+                "n_fn_manual"
+            ]
+        ]
+    },
+    {
+        "id": "n_fn_manual",
+        "type": "function",
+        "z": "tab_fx3u_sim",
+        "name": "Manual Switch",
+        "func": "var ctx = context.get('sim');\nif (!ctx) ctx = { mode: 'normal', lastSwitch: Date.now(), interval: 30000 };\nctx.mode = ctx.mode === 'normal' ? 'heavy' : 'normal';\nctx.lastSwitch = Date.now();\ncontext.set('sim', ctx);\nmsg.payload = Date.now();\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "x": 370,
+        "y": 480,
+        "wires": [
+            [
+                "n_sim"
+            ]
+        ]
+    },
+    {
+        "id": "n_fn_chart",
+        "type": "function",
+        "z": "tab_fx3u_sim",
+        "name": "Chart Prep",
+        "func": "var d = msg.payload;\nreturn [[\n    { topic: 'Voltage (V)',  payload: d.voltage },\n    { topic: 'Current x10', payload: parseFloat((d.current * 10).toFixed(1)) },\n    { topic: 'Power / 10',  payload: Math.round(d.activePower / 10) }\n]];",
+        "outputs": 1,
+        "noerr": 0,
+        "x": 560,
+        "y": 460,
+        "wires": [
+            [
+                "n_chart"
+            ]
+        ]
+    },
+    {
+        "id": "n_chart",
+        "type": "ui_chart",
+        "z": "tab_fx3u_sim",
+        "name": "",
+        "group": "grp_chart",
+        "order": 1,
+        "width": "12",
+        "height": "6",
+        "label": "Voltage | Current x10 | Power / 10",
+        "chartType": "line",
+        "legend": "true",
+        "xformat": "HH:mm:ss",
+        "interpolate": "linear",
+        "nodata": "Waiting...",
+        "dot": false,
+        "ymin": "0",
+        "ymax": "250",
+        "removeOlder": "5",
+        "removeOlderPoints": "",
+        "removeOlderUnit": "60",
+        "cutout": 0,
+        "useOneColor": false,
+        "useUTC": false,
+        "colors": [
+            "#1565c0",
+            "#e65100",
+            "#2e7d32",
+            "#d62728",
+            "#9467bd"
+        ],
+        "useDifferentColor": false,
+        "x": 770,
+        "y": 460,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "n_fn_modbus_prep",
+        "type": "function",
+        "z": "tab_fx3u_sim",
+        "name": "Modbus Prep",
+        "func": "msg.payload  = msg.payload.registers;\nmsg.address  = 0;\nmsg.quantity = 6;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "x": 560,
+        "y": 560,
+        "wires": [
+            [
+                "n_mb_write"
+            ]
+        ]
+    },
+    {
+        "id": "n_mb_write",
+        "type": "modbus-write",
+        "z": "tab_fx3u_sim",
+        "name": "Write HR0-HR5 FC16",
+        "showStatusActivities": false,
+        "showErrors": false,
+        "showWarnings": false,
+        "unitid": "1",
+        "dataType": "MHoldingRegisters",
+        "adr": "0",
+        "quantity": "6",
+        "server": "cfg_mbcli",
+        "emptyMsgOnFail": false,
+        "keepMsgProperties": false,
+        "delayOnStart": true,
+        "startDelayTime": 5,
+        "x": 790,
+        "y": 560,
+        "wires": [
+            [],
+            []
+        ]
+    },
+    {
+        "id": "n_debug",
+        "type": "debug",
+        "z": "tab_fx3u_sim",
+        "name": "Modbus Registers",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": true,
+        "complete": "payload",
+        "targetType": "msg",
+        "x": 790,
+        "y": 630,
+        "wires": []
+    }
+]

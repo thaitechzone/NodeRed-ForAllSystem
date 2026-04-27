@@ -5,7 +5,8 @@
       "Bash(docker network *)",
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(k,v['IPv4Address']\\) for k,v in d[0]['Containers'].items\\(\\)]\")",
       "Bash(findstr \"Name\\\\|IPv4\")",
-      "Bash(docker cp *)"
+      "Bash(docker cp *)",
+      "Bash(python3 -c ' *)"
     ]
   }
 }
