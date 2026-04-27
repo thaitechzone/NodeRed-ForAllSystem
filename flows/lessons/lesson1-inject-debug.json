@@ -1,0 +1,136 @@
+[
+    {
+        "id": "tab-l1",
+        "type": "tab",
+        "label": "L1: Inject → Debug",
+        "disabled": false,
+        "info": "บทเรียนที่ 1: พื้นฐาน Node-RED\nInject node ส่ง message → Debug node แสดงผล\nสังเกต: topic, payload, payloadType ใน Debug sidebar (ด้านขวา)"
+    },
+    {
+        "id": "l1-comment-types",
+        "type": "comment",
+        "z": "tab-l1",
+        "name": "── ทดลองกดปุ่ม Inject แต่ละอัน แล้วดูผลใน Debug Panel (ขวามือ) ──",
+        "info": "",
+        "x": 320,
+        "y": 40,
+        "wires": []
+    },
+    {
+        "id": "l1-inj1",
+        "type": "inject",
+        "z": "tab-l1",
+        "name": "① ส่ง String",
+        "props": [
+            { "p": "payload" },
+            { "p": "topic", "vt": "str" }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "test/string",
+        "payload": "Hello, Node-RED! สวัสดีโลก",
+        "payloadType": "str",
+        "x": 160,
+        "y": 100,
+        "wires": [["l1-dbg"]]
+    },
+    {
+        "id": "l1-inj2",
+        "type": "inject",
+        "z": "tab-l1",
+        "name": "② ส่ง Number (42)",
+        "props": [
+            { "p": "payload" },
+            { "p": "topic", "vt": "str" }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "test/number",
+        "payload": "42",
+        "payloadType": "num",
+        "x": 160,
+        "y": 160,
+        "wires": [["l1-dbg"]]
+    },
+    {
+        "id": "l1-inj3",
+        "type": "inject",
+        "z": "tab-l1",
+        "name": "③ ส่ง Boolean (true)",
+        "props": [
+            { "p": "payload" },
+            { "p": "topic", "vt": "str" }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "test/boolean",
+        "payload": "true",
+        "payloadType": "bool",
+        "x": 160,
+        "y": 220,
+        "wires": [["l1-dbg"]]
+    },
+    {
+        "id": "l1-inj4",
+        "type": "inject",
+        "z": "tab-l1",
+        "name": "④ ส่ง JSON Object",
+        "props": [
+            { "p": "payload" },
+            { "p": "topic", "vt": "str" }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "test/json",
+        "payload": "{\"student\":\"สมชาย\",\"score\":95,\"grade\":\"A\",\"pass\":true}",
+        "payloadType": "json",
+        "x": 160,
+        "y": 280,
+        "wires": [["l1-dbg"]]
+    },
+    {
+        "id": "l1-inj5",
+        "type": "inject",
+        "z": "tab-l1",
+        "name": "⑤ Timestamp อัตโนมัติ (ทุก 3 วิ)",
+        "props": [
+            { "p": "payload" },
+            { "p": "topic", "vt": "str" }
+        ],
+        "repeat": "3",
+        "crontab": "",
+        "once": true,
+        "onceDelay": 0.1,
+        "topic": "test/auto",
+        "payload": "",
+        "payloadType": "date",
+        "x": 160,
+        "y": 340,
+        "wires": [["l1-dbg"]]
+    },
+    {
+        "id": "l1-dbg",
+        "type": "debug",
+        "z": "tab-l1",
+        "name": "Debug — ดู msg ทั้งหมด",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": true,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 450,
+        "y": 220,
+        "wires": []
+    }
+]
