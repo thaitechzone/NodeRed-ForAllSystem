@@ -1,0 +1,270 @@
+{
+  "name": "PLC MQTT Reader — MC01",
+  "nodes": [
+    {
+      "parameters": {
+        "topic": "plc/mc01/data",
+        "options": {
+          "jsonParseBody": true
+        }
+      },
+      "id": "1a2b3c4d-0001-0001-0001-000000000001",
+      "name": "MQTT: plc/mc01/data",
+      "type": "n8n-nodes-base.mqttTrigger",
+      "typeVersion": 1,
+      "position": [0, 300],
+      "credentials": {
+        "mqtt": {
+          "id": "mqtt-mosquitto-local",
+          "name": "Mosquitto Local"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// รับข้อมูลจาก MQTT topic plc/mc01/data\nconst raw = $input.first().json;\nconst d = typeof raw === 'string' ? JSON.parse(raw) : raw;\n\n// ตรวจสอบข้อมูลครบ\nif (!d.P_kw || !d.V_rms) {\n  throw new Error('ข้อมูลไม่ครบ: ' + JSON.stringify(d));\n}\n\n// คำนวณค่าพลังงานต่อ interval (5 วิ)\nconst INTERVAL_SEC   = 5;\nconst COST_PER_KWH   = 4.5;   // บาท/kWh (อัตรา MEA)\nconst energyKwh      = (d.P_kw * INTERVAL_SEC) / 3600;\nconst costBaht       = energyKwh * COST_PER_KWH;\n\n// กำหนด alert level\nlet alertLevel, alertMsg;\nif (d.P_kw > 8.5) {\n  alertLevel = 'HIGH';\n  alertMsg   = 'พลังงานสูงเกินกำหนด: ' + d.P_kw + ' kW (เกิน 8.5 kW)';\n} else if (d.P_kw > 7.0) {\n  alertLevel = 'WARN';\n  alertMsg   = 'พลังงานเริ่มสูง: ' + d.P_kw + ' kW';\n} else {\n  alertLevel = 'OK';\n  alertMsg   = 'ปกติ: ' + d.P_kw + ' kW';\n}\n\n// ตรวจแรงดันผิดปกติ\nconst voltAlert = (d.V_rms < 207 || d.V_rms > 233)\n  ? 'แรงดันผิดปกติ: ' + d.V_rms + ' V'\n  : null;\n\nreturn [{\n  json: {\n    // ข้อมูลเดิมจาก PLC\n    timestamp:   d.timestamp,\n    device_id:   d.device_id,\n    mode:        d.mode,\n    P_kw:        d.P_kw,\n    V_rms:       d.V_rms,\n    I_A:         d.I_A,\n    Hz:          d.Hz,\n    load_pct:    d.load_pct ?? null,\n    // ค่าที่คำนวณเพิ่ม\n    energy_kwh:  parseFloat(energyKwh.toFixed(6)),\n    cost_baht:   parseFloat(costBaht.toFixed(4)),\n    // alert\n    alert_level: alertLevel,\n    alert_msg:   alertMsg,\n    volt_alert:  voltAlert,\n    has_alert:   alertLevel !== 'OK' || voltAlert !== null,\n    processed_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "1a2b3c4d-0002-0002-0002-000000000002",
+      "name": "Parse & Enrich",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "cond-alert",
+              "leftValue": "={{ $json.has_alert }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1a2b3c4d-0003-0003-0003-000000000003",
+      "name": "มี Alert?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a01",
+              "name": "status",
+              "value": "={{ $json.alert_level }}",
+              "type": "string"
+            },
+            {
+              "id": "a02",
+              "name": "device_id",
+              "value": "={{ $json.device_id }}",
+              "type": "string"
+            },
+            {
+              "id": "a03",
+              "name": "mode",
+              "value": "={{ $json.mode }}",
+              "type": "string"
+            },
+            {
+              "id": "a04",
+              "name": "alert_msg",
+              "value": "={{ $json.alert_msg }}",
+              "type": "string"
+            },
+            {
+              "id": "a05",
+              "name": "volt_alert",
+              "value": "={{ $json.volt_alert }}",
+              "type": "string"
+            },
+            {
+              "id": "a06",
+              "name": "P_kw",
+              "value": "={{ $json.P_kw }}",
+              "type": "number"
+            },
+            {
+              "id": "a07",
+              "name": "V_rms",
+              "value": "={{ $json.V_rms }}",
+              "type": "number"
+            },
+            {
+              "id": "a08",
+              "name": "I_A",
+              "value": "={{ $json.I_A }}",
+              "type": "number"
+            },
+            {
+              "id": "a09",
+              "name": "Hz",
+              "value": "={{ $json.Hz }}",
+              "type": "number"
+            },
+            {
+              "id": "a10",
+              "name": "timestamp",
+              "value": "={{ $json.timestamp }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "1a2b3c4d-0004-0004-0004-000000000004",
+      "name": "Alert — ต่อ Notify ได้",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [720, 160],
+      "notes": "ต่อได้: Line Notify / Email / Slack / Google Sheets"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b01",
+              "name": "status",
+              "value": "OK",
+              "type": "string"
+            },
+            {
+              "id": "b02",
+              "name": "device_id",
+              "value": "={{ $json.device_id }}",
+              "type": "string"
+            },
+            {
+              "id": "b03",
+              "name": "mode",
+              "value": "={{ $json.mode }}",
+              "type": "string"
+            },
+            {
+              "id": "b04",
+              "name": "P_kw",
+              "value": "={{ $json.P_kw }}",
+              "type": "number"
+            },
+            {
+              "id": "b05",
+              "name": "V_rms",
+              "value": "={{ $json.V_rms }}",
+              "type": "number"
+            },
+            {
+              "id": "b06",
+              "name": "I_A",
+              "value": "={{ $json.I_A }}",
+              "type": "number"
+            },
+            {
+              "id": "b07",
+              "name": "Hz",
+              "value": "={{ $json.Hz }}",
+              "type": "number"
+            },
+            {
+              "id": "b08",
+              "name": "load_pct",
+              "value": "={{ $json.load_pct }}",
+              "type": "number"
+            },
+            {
+              "id": "b09",
+              "name": "energy_kwh",
+              "value": "={{ $json.energy_kwh }}",
+              "type": "number"
+            },
+            {
+              "id": "b10",
+              "name": "cost_baht",
+              "value": "={{ $json.cost_baht }}",
+              "type": "number"
+            },
+            {
+              "id": "b11",
+              "name": "timestamp",
+              "value": "={{ $json.timestamp }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "1a2b3c4d-0005-0005-0005-000000000005",
+      "name": "Normal — ต่อ Sheet/DB ได้",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [720, 440],
+      "notes": "ต่อได้: Google Sheets / Supabase / HTTP Request"
+    }
+  ],
+  "connections": {
+    "MQTT: plc/mc01/data": {
+      "main": [
+        [
+          {
+            "node": "Parse & Enrich",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse & Enrich": {
+      "main": [
+        [
+          {
+            "node": "มี Alert?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "มี Alert?": {
+      "main": [
+        [
+          {
+            "node": "Alert — ต่อ Notify ได้",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Normal — ต่อ Sheet/DB ได้",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "6d75f38bd5f41abf1511b6ccd10a29b42acea88a6cf5e5c0491bc29690c5771b"
+  },
+  "tags": []
+}
