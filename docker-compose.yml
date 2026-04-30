@@ -1,6 +1,6 @@
 # ════════════════════════════════════════════════════════════════════════════════
-# Node-RED + N8N + MQTT + ngrok Stack
-# 
+# Node-RED + N8N + MQTT + ngrok + Ollama Stack
+#
 # ตัวแปรที่ต้องใน .env file:
 #   - TZ                    (Timezone)
 #   - NGROK_AUTHTOKEN       (ngrok authentication token)
@@ -88,6 +88,31 @@ services:
       - iot_network
 
   # ════════════════════════════════════════════════════════
+  #  Ollama — Local LLM Runtime
+  #  API  : http://localhost:11434
+  #  เรียก model: docker exec -it ollama ollama pull llama3.2
+  # ════════════════════════════════════════════════════════
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+    networks:
+      - iot_network
+
+  # ════════════════════════════════════════════════════════
   #  Ngrok — Tunnel N8N to the internet
   #  Dashboard : http://localhost:4040
   #  ใช้ NGROK_URL กับ --url แทน --domain
@@ -118,3 +143,4 @@ volumes:
   n8n_data:
   mosquitto_data:
   mosquitto_log:
+  ollama_data:
