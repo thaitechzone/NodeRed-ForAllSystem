@@ -1,6 +1,6 @@
-# คู่มือติดตั้ง Node-RED + N8N + MQTT + ngrok (Docker)
+# คู่มือติดตั้ง Node-RED + N8N + MQTT + ngrok + Ollama + PostgreSQL (Docker)
 
-> Platform: Windows 11 Pro | Working dir: `d:\NodeRed`
+> Platform: Windows 11 Pro + WSL2 | NVIDIA GPU (สำหรับ Ollama)
 
 ---
 
@@ -9,12 +9,48 @@
 | รายการ | ตรวจสอบ |
 |--------|---------|
 | Docker Desktop สำหรับ Windows | https://www.docker.com/products/docker-desktop |
-| WSL2 | Docker Desktop จะติดตั้งให้อัตโนมัติ |
+| WSL2 | เปิดใช้งานก่อน (ดูขั้นตอนที่ 0) |
+| NVIDIA GPU + Driver | สำหรับ Ollama (ถ้าไม่มี GPU ดู Troubleshooting) |
 | บัญชี ngrok (ฟรี) | https://dashboard.ngrok.com/signup |
-| RAM | แนะนำ 4 GB ขึ้นไป |
-| Disk ว่าง | 3 GB ขึ้นไป |
+| RAM | แนะนำ 8 GB ขึ้นไป |
+| Disk ว่าง | 10 GB ขึ้นไป (รวม Ollama model) |
 
 > **ไม่ต้องติดตั้ง ngrok ในเครื่อง** — ใช้ Docker image แทน
+
+---
+
+## ขั้นตอนที่ 0 — เปิด WSL2 + NVIDIA Container Toolkit
+
+> ข้ามขั้นตอนนี้ถ้าไม่ใช้ GPU หรือติดตั้งแล้ว
+
+เปิด **PowerShell as Administrator**:
+
+```powershell
+wsl --install -d Ubuntu-22.04
+wsl --set-default-version 2
+```
+
+รีสตาร์ทเครื่อง จากนั้นเปิด **Ubuntu terminal** แล้วรัน:
+
+```bash
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
+  | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+
+curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
+  | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
+  | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+
+sudo apt-get update && sudo apt-get install -y nvidia-container-toolkit
+sudo nvidia-ctk runtime configure --runtime=docker
+```
+
+รีสตาร์ท Docker Desktop แล้วทดสอบ:
+
+```bash
+docker run --rm --gpus all nvidia/cuda:12.0.0-base-ubuntu22.04 nvidia-smi
+```
+
+ผลลัพธ์ที่ถูกต้อง: เห็นชื่อ GPU ปรากฏใน output
 
 ---
 
@@ -42,14 +78,17 @@ docker compose version
 ต้องมีไฟล์เหล่านี้ครบก่อนรัน:
 
 ```
-d:\NodeRed\
+NodeRed-ForAllSystem/
   ├── .env
   ├── docker-compose.yml
-  ├── mosquitto\
-  │     └── config\
+  ├── mosquitto/
+  │     └── config/
   │           └── mosquitto.conf
-  └── nodered\
-        └── settings.js
+  ├── nodered/
+  │     └── settings.js
+  └── postgres/
+        └── init/
+              └── 01_init.sql     ← สร้างตาราง IoT อัตโนมัติ
 ```
 
 ---
@@ -79,6 +118,13 @@ d:\NodeRed\
 
 เปิด `.env` แล้วแก้ค่าให้ตรงกับระบบ:
 
+คัดลอก `.env.example` เป็น `.env` แล้วแก้ค่า:
+
+```bash
+cp .env.example .env
+nano .env   # หรือเปิดด้วย editor อื่น
+```
+
 ```env
 # Timezone
 TZ=Asia/Bangkok
@@ -89,8 +135,13 @@ NGROK_DOMAIN=your-name-abc.ngrok-free.dev       # ไม่มี https://
 NGROK_URL=https://your-name-abc.ngrok-free.dev  # ใช้ static domain ของ ngrok
 
 # ─── N8N ─────────────────────────────────────────────────
-# สร้างด้วย PowerShell: powershell -Command "-join ((1..32) | ForEach-Object { '{0:x}' -f (Get-Random -Max 16) })"
-N8N_ENCRYPTION_KEY=random-32-char-string
+# สร้างด้วย: openssl rand -hex 16
+N8N_ENCRYPTION_KEY=random-32-char-hex-string
+
+# ─── PostgreSQL ──────────────────────────────────────────
+POSTGRES_USER=iot_user
+POSTGRES_PASSWORD=ตั้ง-password-ที่แข็งแกร่ง
+POSTGRES_DB=iot_db
 ```
 
 > **หมายเหตุ**: Node-RED ไม่มีการ login แล้ว เข้า http://localhost:1880 ได้เลย
@@ -118,8 +169,10 @@ docker compose ps
 ```
 NAME         IMAGE                    STATUS
 mosquitto    eclipse-mosquitto:2      running (healthy)
-nodered      nodered/node-red:latest  running (healthy)
+postgres     postgres:16              running (healthy)
+nodered      nodered/node-red:latest  running
 n8n          n8nio/n8n:latest         running
+ollama       ollama/ollama:latest     running
 ngrok        ngrok/ngrok:latest       running
 ```
 
@@ -129,14 +182,82 @@ ngrok        ngrok/ngrok:latest       running
 
 | Service | URL | หมายเหตุ |
 |---------|-----|---------|
-| Node-RED | http://localhost:1880 | ไม่ต้อง login (ปิด authentication) |
+| Node-RED | http://localhost:1880 | ไม่ต้อง login |
 | N8N (local) | http://localhost:5678 | สร้าง account ครั้งแรก |
 | N8N (public) | `https://your-domain.ngrok-free.dev` | เดียวกับ local |
+| Ollama API | http://localhost:11434 | LLM API |
 | ngrok Dashboard | http://localhost:4040 | ไม่ต้อง login |
 
 ---
 
-## ขั้นตอนที่ 7 — ติดตั้ง OPC-UA Node ใน Node-RED (optional)
+## ขั้นตอนที่ 7 — ตั้งค่า PostgreSQL
+
+ตรวจสอบว่า postgres healthy และตาราง init ถูกสร้างแล้ว:
+
+```bash
+# เช็คสถานะ
+docker compose ps postgres
+
+# ดูตารางที่สร้างจาก init script
+docker exec -it postgres psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -c "\dt"
+```
+
+ผลลัพธ์ที่ถูกต้อง:
+
+```
+          List of relations
+ Schema |       Name        | Type  |  Owner
+--------+-------------------+-------+---------
+ public | ai_decisions      | table | iot_user
+ public | energy_telemetry  | table | iot_user
+```
+
+**เชื่อมต่อจาก Node-RED หรือ N8N:**
+
+| Field | ค่า |
+|-------|-----|
+| Host | `postgres` |
+| Port | `5432` |
+| Database | ค่า `POSTGRES_DB` ใน .env |
+| User | ค่า `POSTGRES_USER` ใน .env |
+| Password | ค่า `POSTGRES_PASSWORD` ใน .env |
+
+> N8N ใช้ PostgreSQL เป็น backend database อัตโนมัติแล้ว ไม่ต้องตั้งค่าเพิ่ม
+
+---
+
+## ขั้นตอนที่ 8 — Pull Ollama Model
+
+```bash
+# แนะนำสำหรับ VRAM 4GB
+docker exec -it ollama ollama pull llama3.2:3b
+
+# ดูรายการ model
+docker exec -it ollama ollama list
+
+# ทดสอบเรียก API
+curl http://localhost:11434/api/generate \
+  -d '{"model":"llama3.2:3b","prompt":"สวัสดี","stream":false}'
+```
+
+### ตั้งค่า Ollama ใน N8N (AI Agent)
+
+1. N8N → Credentials → **+ Add credential** → ค้นหา **OpenAI**
+2. ใส่ค่า:
+
+| Field | ค่า |
+|-------|-----|
+| API Key | `ollama` |
+| Base URL | `http://ollama:11434/v1` |
+
+3. ตั้งชื่อ `Ollama via OpenAI` → **Save**
+
+> ใช้ node **OpenAI Chat Model** แทน `lmChatOllama` เพราะเสถียรกว่า
+> ดูรายละเอียดที่ `docs/ollama-n8n-agent-test.md`
+
+---
+
+## ขั้นตอนที่ 9 — ติดตั้ง OPC-UA Node ใน Node-RED (optional)
 
 ข้ามขั้นตอนนี้ถ้ายังไม่ต้องการ OPC-UA
 
@@ -256,16 +377,19 @@ docker stats
 ## Checklist ทั้งระบบ
 
 ### ติดตั้งครั้งแรก
-- [ ] ติดตั้ง Docker Desktop + WSL2
+- [ ] เปิด WSL2 + ติดตั้ง NVIDIA Container Toolkit (ถ้าใช้ GPU)
+- [ ] ติดตั้ง Docker Desktop + เปิด WSL2 Integration
 - [ ] สมัครบัญชี ngrok + สร้าง Static Domain
-- [ ] แก้ไข `.env` — ใส่ `NGROK_AUTHTOKEN`, `NGROK_DOMAIN`, `NGROK_URL`
-- [ ] แก้ไข `.env` — ตั้งค่า `N8N_ENCRYPTION_KEY`
+- [ ] คัดลอก `.env.example` → `.env` แล้วแก้ค่าทุกช่อง
 - [ ] `docker compose pull` แล้ว `docker compose up -d`
-- [ ] ตรวจสอบ ngrok tunnel: `docker logs ngrok` หรือ http://localhost:4040
-- [ ] ทดสอบเข้า Node-RED ที่ http://localhost:1880 (ไม่ต้อง login)
+- [ ] ตรวจสอบทุก service แสดง `running`: `docker compose ps`
+- [ ] ตรวจสอบตาราง PostgreSQL: `docker exec -it postgres psql -U iot_user -d iot_db -c "\dt"`
+- [ ] Pull Ollama model: `docker exec -it ollama ollama pull llama3.2:3b`
+- [ ] สร้าง N8N credential `Ollama via OpenAI` (Base URL: `http://ollama:11434/v1`)
+- [ ] ทดสอบเข้า Node-RED ที่ http://localhost:1880
 - [ ] ทดสอบสร้างบัญชี N8N ที่ http://localhost:5678
-- [ ] ติดตั้ง `node-red-contrib-opcua` ผ่าน Node-RED UI และตั้ง endpoint ใน UI (ถ้าใช้ OPC-UA)
 - [ ] ตั้งค่า MQTT Credential ใน N8N (host: `mosquitto`, port: `1883`)
+- [ ] ติดตั้ง `node-red-contrib-opcua` ผ่าน Node-RED UI (ถ้าใช้ OPC-UA)
 
 ### Setup OAuth2 (Google Services)
 - [ ] Google Cloud: Enable Gmail API + Drive API + Generative Language API
@@ -289,6 +413,11 @@ docker stats
 | OAuth2 callback ล้มเหลว | ต้องเปิด N8N ผ่าน ngrok URL ไม่ใช่ localhost |
 | N8N เชื่อม MQTT ไม่ได้ | ใช้ hostname `mosquitto` ไม่ใช่ `localhost` |
 | `mosquitto unhealthy` | `docker logs mosquitto` — มักเป็น mosquitto.conf ผิด |
+| `postgres unhealthy` | `docker logs postgres` — ตรวจสอบ POSTGRES_* ใน .env |
+| N8N ไม่ start (DB error) | ตรวจว่า postgres healthy ก่อน: `docker compose ps postgres` |
+| Ollama AI Agent fetch failed | ใช้ node OpenAI Chat Model + credential Base URL: `http://ollama:11434/v1` |
+| Ollama ไม่ใช้ GPU | `docker info \| grep -i runtime` ต้องเห็น `nvidia` — รัน nvidia-ctk ใหม่ |
 | Node-RED ไม่โหลด OPC node | `docker restart nodered` แล้วรอ 30 วิ |
-| Port 1883 ถูกใช้งาน | `netstat -ano \| findstr :1883` หา PID แล้ว `taskkill /PID xxx /F` |
+| Port 1883/5432 ถูกใช้งาน | `netstat -ano \| findstr :1883` หา PID แล้ว `taskkill /PID xxx /F` |
 | Docker ไม่ start | เปิด Docker Desktop ก่อนแล้วรอ engine พร้อม |
+| ไม่มี GPU (ใช้ CPU แทน) | comment ส่วน `deploy.resources` ใน docker-compose.yml ออก |

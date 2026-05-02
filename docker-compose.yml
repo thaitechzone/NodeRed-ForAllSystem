@@ -1,15 +1,17 @@
 # ════════════════════════════════════════════════════════════════════════════════
-# Node-RED + N8N + MQTT + ngrok Stack
-# 
+# Node-RED + N8N + MQTT + ngrok + Ollama + PostgreSQL Stack
+#
 # ตัวแปรที่ต้องใน .env file:
 #   - TZ                    (Timezone)
 #   - NGROK_AUTHTOKEN       (ngrok authentication token)
 #   - NGROK_DOMAIN          (ngrok static domain, ไม่มี https://)
 #   - NGROK_URL             (ngrok URL for N8N/ngrok CLI, มี https://)
 #   - N8N_ENCRYPTION_KEY    (N8N encryption key - 32 char hex)
+#   - POSTGRES_USER         (PostgreSQL username)
+#   - POSTGRES_PASSWORD     (PostgreSQL password)
+#   - POSTGRES_DB           (PostgreSQL database name)
 #
 # หมายเหตุ: Docker Compose จะอ่าน .env file โดยอัตโนมัติจาก directory เดียวกัน
-# และ ngrok service ด้านล่างจะใช้ NGROK_URL กับ --url เพื่อรองรับ ngrok CLI รุ่นใหม่
 # ════════════════════════════════════════════════════════════════════════════════
 
 services:
@@ -39,6 +41,34 @@ services:
       retries: 3
 
   # ════════════════════════════════════════════════════════
+  #  PostgreSQL — Relational Database
+  #  Port  : localhost:5432
+  #  เชื่อมจาก container อื่น: host=postgres port=5432
+  #  Init scripts: ./postgres/init/*.sql (รันครั้งแรกอัตโนมัติ)
+  # ════════════════════════════════════════════════════════
+  postgres:
+    image: postgres:16
+    container_name: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - TZ=${TZ}
+    restart: unless-stopped
+    networks:
+      - iot_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ════════════════════════════════════════════════════════
   #  Node-RED — Flow-based automation
   #  UI : http://localhost:1880 (ไม่ต้อง login)
   # ════════════════════════════════════════════════════════
@@ -54,12 +84,15 @@ services:
     depends_on:
       mosquitto:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
     networks:
       - iot_network
 
   # ════════════════════════════════════════════════════════
   #  N8N — Workflow Automation
   #  UI : http://localhost:5678
+  #  ใช้ PostgreSQL เป็น backend database
   # ════════════════════════════════════════════════════════
   n8n:
     image: n8nio/n8n:latest
@@ -80,17 +113,50 @@ services:
       - N8N_METRICS=false
       - EXECUTIONS_DATA_PRUNE=true
       - EXECUTIONS_DATA_MAX_AGE=168
+      # PostgreSQL backend
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=${POSTGRES_DB}
+      - DB_POSTGRESDB_USER=${POSTGRES_USER}
+      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
     restart: unless-stopped
     depends_on:
       mosquitto:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - iot_network
+
+  # ════════════════════════════════════════════════════════
+  #  Ollama — Local LLM Runtime (GPU)
+  #  API  : http://localhost:11434
+  #  เรียก model: docker exec -it ollama ollama pull llama3.2:3b
+  # ════════════════════════════════════════════════════════
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
     networks:
       - iot_network
 
   # ════════════════════════════════════════════════════════
   #  Ngrok — Tunnel N8N to the internet
   #  Dashboard : http://localhost:4040
-  #  ใช้ NGROK_URL กับ --url แทน --domain
   # ════════════════════════════════════════════════════════
   ngrok:
     image: ngrok/ngrok:latest
@@ -118,3 +184,5 @@ volumes:
   n8n_data:
   mosquitto_data:
   mosquitto_log:
+  ollama_data:
+  postgres_data:
