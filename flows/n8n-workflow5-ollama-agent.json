@@ -1,0 +1,77 @@
+{
+  "name": "Ollama AI Agent Test",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "c0000001-0001-0001-0001-000000000001",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    system_prompt: 'คุณเป็น AI วิศวกรพลังงานอุตสาหกรรม เชี่ยวชาญการวิเคราะห์ข้อมูลเครื่องจักรและให้คำแนะนำประหยัดพลังงาน ตอบเป็นภาษาไทย กระชับ ชัดเจน',\n    user_prompt: 'เครื่องจักร MC-01 มีค่า Power Factor = 0.75 และใช้กำลังไฟเฉลี่ย 8.2 kW เกิน threshold 7.5 kW วิเคราะห์ว่าควรลดกำลังหรือไม่ และให้คำแนะนำ 2-3 ข้อ'\n  }\n}];"
+      },
+      "id": "c0000001-0002-0002-0002-000000000002",
+      "name": "Set Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.user_prompt }}",
+        "options": {
+          "systemMessage": "={{ $json.system_prompt }}"
+        }
+      },
+      "id": "c0000001-0003-0003-0003-000000000003",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "model": "llama3.2:3b",
+        "options": {}
+      },
+      "id": "c0000001-0004-0004-0004-000000000004",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [580, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json;\nconst response = raw.output || raw.text || raw.response || JSON.stringify(raw);\nreturn [{\n  json: {\n    agent_response: response,\n    char_count: response.length\n  }\n}];"
+      },
+      "id": "c0000001-0005-0005-0005-000000000005",
+      "name": "Extract Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [[{"node": "Set Prompt", "type": "main", "index": 0}]]
+    },
+    "Set Prompt": {
+      "main": [[{"node": "AI Agent", "type": "main", "index": 0}]]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [[{"node": "AI Agent", "type": "ai_languageModel", "index": 0}]]
+    },
+    "AI Agent": {
+      "main": [[{"node": "Extract Response", "type": "main", "index": 0}]]
+    }
+  },
+  "pinData": {},
+  "settings": {"executionOrder": "v1"},
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0
+}
