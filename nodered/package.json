@@ -1,0 +1,9 @@
+{
+  "name": "node-red-iot-platform",
+  "description": "Node-RED IoT Platform packages",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "node-red-contrib-postgresql": "0.10.5"
+  }
+}
