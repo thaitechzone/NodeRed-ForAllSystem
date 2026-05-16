@@ -1,7 +1,7 @@
 # คู่มือระบบ Smart Energy Management
 ## Node-RED + N8N + AI Agent + Google Sheets
 
-> **เวอร์ชัน:** 1.1 | **วันที่:** 19 เมษายน 2569 | **ภาษา:** ไทย  
+> **เวอร์ชัน:** 2.0 | **วันที่:** 16 พฤษภาคม 2569 | **ภาษา:** ไทย  
 > **ตรวจสอบจาก:** source code จริงใน `flows/` และ `docker-compose.yml`
 
 ---
@@ -43,57 +43,66 @@
 ## 2. สถาปัตยกรรม
 
 ```
+Internet
+    │  HTTPS (Cloudflare Tunnel)
+    ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                     LOCAL (Docker)                          │
 │                                                             │
-│  ┌──────────────┐           ┌──────────────────────────┐   │
-│  │  Mosquitto   │           │        Node-RED          │   │
-│  │  Port: 1883  │◄── MQTT ──│  Port: 1880              │   │
-│  └──────────────┘           │  - Simulator (10s tick)  │   │
-│                             │  - Dashboard UI           │   │
-│  ┌──────────────┐           │  - POST /energy-command  │   │
-│  │    ngrok     │           └────────────┬─────────────┘   │
-│  │  Port: 4040  │◄────────────── tunnel ─┤                  │
-│  └──────┬───────┘           ┌────────────▼─────────────┐   │
-│         │                   │           N8N            │   │
-│         └────────── HTTPS ──│  Port: 5678              │   │
-└─────────────────────────────└──────────────────────────┘───┘
-                                           │
-                              ┌────────────▼────────────┐
-                              │      Google Sheets       │
-                              │  EnergyLog  (Sheet1)     │
-                              │  LogResult  (ชีต1)       │
-                              └────────────┬────────────┘
-                                           │ อ่านข้อมูล
-                              ┌────────────▼────────────┐
-                              │  OpenRouter AI Agent     │
-                              │  (ทุก 1 นาที)           │
-                              └─────────────────────────┘
+│  ┌──────────────┐    ┌──────────────────┐                  │
+│  │  cloudflared │───►│  Nginx Proxy Mgr │                  │
+│  │  (Tunnel)    │    │  Port: 80/443/81 │                  │
+│  └──────────────┘    └────────┬─────────┘                  │
+│                               │                             │
+│  ┌──────────────┐    ┌────────▼─────────────────────────┐  │
+│  │  Mosquitto   │    │           N8N                    │  │
+│  │  Port: 1883  │◄───│  Port: 5678                      │  │
+│  └──────┬───────┘    │  Public: https://${N8N_DOMAIN}   │  │
+│         │  MQTT      └────────────┬─────────────────────┘  │
+│         ▼                         │                         │
+│  ┌──────────────┐    ┌────────────▼─────────────────────┐  │
+│  │   Node-RED   │    │      Google Sheets               │  │
+│  │  Port: 1880  │    │  EnergyLog / LogResult           │  │
+│  │  Simulator   │    └────────────┬─────────────────────┘  │
+│  │  Dashboard   │                 │ อ่านข้อมูล              │
+│  └──────────────┘    ┌────────────▼─────────────────────┐  │
+│                      │     OpenRouter AI Agent          │  │
+│  ┌──────────────┐    │     (ทุก 1 นาที)                │  │
+│  │  InfluxDB    │    └──────────────────────────────────┘  │
+│  │  Port: 8086  │                                          │
+│  └──────┬───────┘                                          │
+│         ▼                                                   │
+│  ┌──────────────┐                                          │
+│  │   Grafana    │                                          │
+│  │  Port: 3000  │                                          │
+│  └──────────────┘                                          │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ### URL ที่ใช้งาน
 
 | บริการ | URL | หมายเหตุ |
 |---|---|---|
-| Node-RED UI | `http://localhost:1880` | Flow editor (ไม่ต้อง login) |
+| Node-RED UI | `http://localhost:1880` | Flow editor |
 | Node-RED Dashboard | `http://localhost:1880/ui` | แสดงผล real-time |
-| N8N | `http://localhost:5678` | Workflow editor |
-| ngrok Dashboard | `http://localhost:4040` | Monitor tunnel traffic |
-| ngrok Public URL | `https://junie-overcredulous-flushedly.ngrok-free.dev` | Public URL ของ N8N |
-
-> **หมายเหตุ:** ngrok Public URL ขึ้นกับ domain ใน `.env` หากใช้บัญชี ngrok ของตัวเอง ต้องอัปเดต URL ทุกแห่งที่อ้างถึง
+| N8N (local) | `http://localhost:5678` | Workflow editor |
+| N8N (public) | `https://<N8N_DOMAIN>` | ผ่าน Cloudflare Tunnel |
+| InfluxDB | `http://localhost:8086` | Time-series database UI |
+| Grafana | `http://localhost:3000` | Dashboard visualization |
+| Nginx Proxy Manager | `http://localhost:81` | Reverse proxy admin |
+| Home Assistant | `http://localhost:8123` | Home automation |
 
 ---
 
 ## 3. โครงสร้างไฟล์โปรเจกต์
 
 ```
-d:\NodeRed\
+NodeRed-ForAllSystem/
 ├── .env                          ← ตัวแปร environment (สร้างจาก .env.example)
 ├── .env.example                  ← Template สำหรับสร้าง .env
 ├── docker-compose.yml            ← กำหนด services ทั้งหมด
 ├── PROJECT-MANUAL.md             ← คู่มือนี้
-├── README.md                     ← เอกสารภาพรวม (ภาษาไทย)
+├── README.md                     ← เอกสารภาพรวม
 ├── INSTALL.md                    ← คู่มือติดตั้งทีละขั้นตอน
 │
 ├── flows/
@@ -104,9 +113,11 @@ d:\NodeRed\
 ├── nodered/
 │   └── settings.js               ← Config Node-RED (timezone, logging, auth)
 │
-└── mosquitto/
-    └── config/
-        └── mosquitto.conf        ← Config MQTT Broker
+├── mosquitto/
+│   └── config/
+│       └── mosquitto.conf        ← Config MQTT Broker
+│
+└── esp32-firmware-NodeRED/       ← Firmware สำหรับ ESP32
 ```
 
 ---
@@ -117,10 +128,15 @@ d:\NodeRed\
 
 | Container | Image | Port | หน้าที่ |
 |---|---|---|---|
-| `mosquitto` | eclipse-mosquitto:2 | 1883 (MQTT), 9001 (WebSocket) | MQTT Broker สำหรับ IoT |
+| `mosquitto` | eclipse-mosquitto:2 | 1883, 9001 | MQTT Broker สำหรับ IoT |
+| `postgres` | postgres:16 | 5432 | Database สำหรับ N8N |
+| `influxdb` | influxdb:2.7 | 8086 | Time-series database |
 | `nodered` | nodered/node-red:latest | 1880 | Flow automation + Dashboard |
 | `n8n` | n8nio/n8n:latest | 5678 | Workflow automation + AI |
-| `ngrok` | ngrok/ngrok:latest | 4040 | Tunnel N8N สู่ internet |
+| `homeassistant` | homeassistant/home-assistant:stable | 8123 | Home automation |
+| `grafana` | grafana/grafana:latest | 3000 | Data visualization |
+| `nginx-proxy-manager` | jc21/nginx-proxy-manager:latest | 80, 443, 81 | Reverse proxy + SSL |
+| `cloudflared` | cloudflare/cloudflared:latest | — | Cloudflare Tunnel |
 
 ### Environment Variables
 
@@ -128,15 +144,19 @@ d:\NodeRed\
 
 ```env
 TZ=Asia/Bangkok
-NGROK_AUTHTOKEN=<your-token-from-ngrok-dashboard>
-NGROK_DOMAIN=<your-domain>.ngrok-free.dev
-NGROK_URL=https://<your-domain>.ngrok-free.dev
-N8N_ENCRYPTION_KEY=<32-char-hex-string>
-```
-
-วิธีสร้าง `N8N_ENCRYPTION_KEY`:
-```powershell
-powershell -Command "-join ((1..32) | ForEach-Object { '{0:x}' -f (Get-Random -Max 16) })"
+CLOUDFLARE_TUNNEL_TOKEN=<token-จาก-cloudflare-dashboard>
+N8N_DOMAIN=n8n.yourdomain.com
+N8N_ENCRYPTION_KEY=<32-char-hex>           # openssl rand -hex 16
+POSTGRES_USER=iot_user
+POSTGRES_PASSWORD=<strong-password>
+POSTGRES_DB=iot_db
+INFLUXDB_USERNAME=admin
+INFLUXDB_PASSWORD=<strong-password>
+INFLUXDB_ORG=iot_org
+INFLUXDB_BUCKET=iot_bucket
+INFLUXDB_ADMIN_TOKEN=<64-char-hex>         # openssl rand -hex 32
+GRAFANA_ADMIN_USER=admin
+GRAFANA_ADMIN_PASSWORD=<strong-password>
 ```
 
 ### N8N Environment ที่สำคัญ
@@ -144,8 +164,8 @@ powershell -Command "-join ((1..32) | ForEach-Object { '{0:x}' -f (Get-Random -M
 | Variable | ค่า | คำอธิบาย |
 |---|---|---|
 | `N8N_PROTOCOL` | `https` | บอก N8N ว่าทำงานเบื้องหลัง HTTPS |
-| `WEBHOOK_URL` | `${NGROK_URL}/` | Public URL สำหรับ webhook |
-| `N8N_EDITOR_BASE_URL` | `${NGROK_URL}/` | URL สำหรับ N8N editor |
+| `WEBHOOK_URL` | `https://${N8N_DOMAIN}/` | Public URL สำหรับ webhook |
+| `N8N_EDITOR_BASE_URL` | `https://${N8N_DOMAIN}/` | URL สำหรับ N8N editor |
 | `EXECUTIONS_DATA_MAX_AGE` | `168` | เก็บ execution logs 7 วัน |
 
 ### Node-RED Settings (nodered/settings.js)
@@ -173,14 +193,16 @@ docker compose up -d
 docker compose ps
 
 # ดู logs
-docker logs nodered --tail 30 -f
-docker logs n8n --tail 30 -f
+docker compose logs -f nodered
+docker compose logs -f n8n
+docker compose logs -f cloudflared
 
 # หยุด stack
 docker compose down
 
 # รีสตาร์ท container เดียว
 docker compose restart nodered
+docker compose up -d --force-recreate cloudflared
 ```
 
 ---
@@ -304,14 +326,12 @@ msg.payload = {
 };
 ```
 
-header เพิ่ม `ngrok-skip-browser-warning: true` เพื่อข้ามหน้า warning ของ ngrok
-
 ---
 
 ### 5.4 POST to N8N — Node: `http_post_n8n`
 
 ```
-POST https://junie-overcredulous-flushedly.ngrok-free.dev/webhook/energy-machine-telemetry
+POST https://<N8N_DOMAIN>/webhook/energy-machine-telemetry
 Content-Type: application/json
 ```
 
@@ -364,7 +384,7 @@ return [msg, uiMsg];   // output 1 → http response, output 2 → UI
 | Path | `energy-machine-telemetry` |
 | Method | POST |
 | Response Mode | `responseNode` (รอ Respond node ส่งคืนก่อน) |
-| URL สมบูรณ์ | `https://junie-overcredulous-flushedly.ngrok-free.dev/webhook/energy-machine-telemetry` |
+| URL สมบูรณ์ | `https://<N8N_DOMAIN>/webhook/energy-machine-telemetry` |
 
 ---
 
@@ -799,23 +819,21 @@ reduce_power = false → Simulator ทำงานปกติ NORMAL mode
 ### ขั้นตอนที่ 1 — เตรียม Environment
 
 ```bash
-cd d:\NodeRed
-
 # คัดลอก template
 cp .env.example .env
 
 # แก้ไข .env ใส่ค่าจริง
-# - NGROK_AUTHTOKEN: จาก https://dashboard.ngrok.com/get-started/your-authtoken
-# - NGROK_DOMAIN: domain ที่สร้างที่ https://dashboard.ngrok.com/cloud-edge/domains
-# - NGROK_URL: https:// + NGROK_DOMAIN
-# - N8N_ENCRYPTION_KEY: สร้างด้วยคำสั่งด้านบน
+# - CLOUDFLARE_TUNNEL_TOKEN: จาก Cloudflare Zero Trust Dashboard
+# - N8N_DOMAIN: โดเมนที่ตั้งใน Cloudflare (เช่น n8n.yourdomain.com)
+# - N8N_ENCRYPTION_KEY: openssl rand -hex 16
+# - POSTGRES_PASSWORD, INFLUXDB_*, GRAFANA_*: ตั้ง password ที่แข็งแกร่ง
 ```
 
 ### ขั้นตอนที่ 2 — เริ่ม Docker Stack
 
 ```bash
 docker compose up -d
-docker compose ps   # ตรวจสอบทุก service ต้อง Up
+docker compose ps   # ตรวจสอบทุก service ต้อง running
 ```
 
 ### ขั้นตอนที่ 3 — Import Node-RED Flow
@@ -826,7 +844,7 @@ docker compose ps   # ตรวจสอบทุก service ต้อง Up
 
 ### ขั้นตอนที่ 4 — ตั้งค่า N8N Credentials
 
-1. เปิด `https://<your-ngrok-domain>` (ผ่าน ngrok) หรือ `http://localhost:5678`
+1. เปิด `https://<N8N_DOMAIN>` (ผ่าน Cloudflare) หรือ `http://localhost:5678`
 2. สร้าง account และ login
 3. เพิ่ม Credentials:
    - **Google Sheets OAuth2** — ชื่อ: `Google Sheets account`
@@ -847,11 +865,18 @@ docker compose ps   # ตรวจสอบทุก service ต้อง Up
 
 ### ขั้นตอนที่ 7 — เตรียม Google Sheets
 
+> ต้องเปิด N8N ผ่าน `https://<N8N_DOMAIN>` เพื่อทำ OAuth2 Google
+
 **EnergyLog Sheet** (Workflow 1 จะสร้าง/เติม row อัตโนมัติ):
 - ต้องมีแถว header ใน Sheet1 ชื่อคอลัมน์ตามฟิลด์ในตาราง Section 6
 
 **LogResult Sheet** (Workflow 2 จะสร้าง/เติม row อัตโนมัติ):
 - ต้องมีแถว header ใน ชีต1 คอลัมน์: `reduce_power`, `status`, `ts`, `season`, `recommendation`, `summary`, `risk_level`
+
+**Google OAuth2 Redirect URI** (ใส่ใน Google Console):
+```
+https://<N8N_DOMAIN>/rest/oauth2-credential/callback
+```
 
 ### ขั้นตอนที่ 8 — ตรวจสอบการทำงาน
 
@@ -861,6 +886,7 @@ docker compose ps   # ตรวจสอบทุก service ต้อง Up
 # 3. เปิด Google Sheets → ควรเห็น row ใหม่เพิ่มเรื่อยๆ
 # 4. หลัง 1 นาที → N8N Workflow 2 ควรทำงาน
 # 5. ดู Dashboard http://localhost:1880/ui
+# 6. ตรวจ Cloudflare Tunnel: docker compose logs -f cloudflared
 ```
 
 ---
@@ -959,4 +985,14 @@ const rawText =
 
 ---
 
-*คู่มือนี้จัดทำจากโค้ดจริงใน `flows/` | อัปเดตล่าสุด: 19 เมษายน 2569 (2026)*
+### ปัญหา: N8N เข้าถึงจาก internet ไม่ได้
+
+**สาเหตุ:** Cloudflare Tunnel ยังไม่ได้รับการตั้งค่า หรือ Nginx Proxy Manager ยังไม่มี Proxy Host  
+**แก้ไข:**
+1. ตรวจ: `docker compose logs cloudflared` — ต้องไม่มี error
+2. ตรวจว่า Nginx Proxy Manager (http://localhost:81) มี Proxy Host สำหรับ `<N8N_DOMAIN>` → `n8n:5678`
+3. ตรวจ Cloudflare Dashboard ว่า Public Hostname ชี้ไปที่ `http://nginx-proxy-manager:80`
+
+---
+
+*คู่มือนี้จัดทำจากโค้ดจริงใน `flows/` | อัปเดตล่าสุด: 16 พฤษภาคม 2569 (2026)*

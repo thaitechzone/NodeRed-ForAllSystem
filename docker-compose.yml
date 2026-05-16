@@ -1,25 +1,37 @@
 # ════════════════════════════════════════════════════════════════════════════════
-# Node-RED + N8N + MQTT + ngrok + Ollama + PostgreSQL Stack
+# NodeRED + N8N + Home Assistant + InfluxDB + Grafana + Nginx Proxy Manager
+# + Cloudflare Tunnel + MQTT + PostgreSQL
 #
 # ตัวแปรที่ต้องใน .env file:
-#   - TZ                    (Timezone)
-#   - NGROK_AUTHTOKEN       (ngrok authentication token)
-#   - NGROK_DOMAIN          (ngrok static domain, ไม่มี https://)
-#   - NGROK_URL             (ngrok URL for N8N/ngrok CLI, มี https://)
-#   - N8N_ENCRYPTION_KEY    (N8N encryption key - 32 char hex)
-#   - POSTGRES_USER         (PostgreSQL username)
-#   - POSTGRES_PASSWORD     (PostgreSQL password)
-#   - POSTGRES_DB           (PostgreSQL database name)
+#   TZ                      — Timezone เช่น Asia/Bangkok
+#   CLOUDFLARE_TUNNEL_TOKEN — Cloudflare Tunnel token
+#   N8N_DOMAIN              — โดเมนสำหรับ N8N เช่น n8n.yourdomain.com
+#   N8N_ENCRYPTION_KEY      — 32-char hex (openssl rand -hex 16)
+#   POSTGRES_USER           — PostgreSQL username
+#   POSTGRES_PASSWORD       — PostgreSQL password
+#   POSTGRES_DB             — PostgreSQL database name
+#   INFLUXDB_USERNAME       — InfluxDB admin username
+#   INFLUXDB_PASSWORD       — InfluxDB admin password
+#   INFLUXDB_ORG            — InfluxDB organization
+#   INFLUXDB_BUCKET         — InfluxDB default bucket
+#   INFLUXDB_ADMIN_TOKEN    — InfluxDB admin token (openssl rand -hex 32)
+#   GRAFANA_ADMIN_USER      — Grafana admin username
+#   GRAFANA_ADMIN_PASSWORD  — Grafana admin password
 #
-# หมายเหตุ: Docker Compose จะอ่าน .env file โดยอัตโนมัติจาก directory เดียวกัน
+# Cloudflare Tunnel Setup:
+#   1. สร้าง Tunnel ที่ https://one.dash.cloudflare.com → Networks → Tunnels
+#   2. Copy token มาใส่ CLOUDFLARE_TUNNEL_TOKEN
+#   3. เพิ่ม Public Hostname: n8n.yourdomain.com → http://nginx-proxy-manager:80
+#   4. ใน Nginx Proxy Manager เพิ่ม Proxy Host:
+#      n8n.yourdomain.com → http://n8n:5678
 # ════════════════════════════════════════════════════════════════════════════════
 
 services:
 
   # ════════════════════════════════════════════════════════
   #  Mosquitto — Local MQTT Broker
-  #  MQTT  : localhost:1883
-  #  WS    : localhost:9001
+  #  MQTT : localhost:1883
+  #  WS   : localhost:9001
   # ════════════════════════════════════════════════════════
   mosquitto:
     image: eclipse-mosquitto:2
@@ -41,10 +53,8 @@ services:
       retries: 3
 
   # ════════════════════════════════════════════════════════
-  #  PostgreSQL — Relational Database
-  #  Port  : localhost:5432
-  #  เชื่อมจาก container อื่น: host=postgres port=5432
-  #  Init scripts: ./postgres/init/*.sql (รันครั้งแรกอัตโนมัติ)
+  #  PostgreSQL — Relational Database (N8N backend)
+  #  Port : localhost:5432
   # ════════════════════════════════════════════════════════
   postgres:
     image: postgres:16
@@ -69,8 +79,38 @@ services:
       retries: 5
 
   # ════════════════════════════════════════════════════════
-  #  Node-RED — Flow-based automation
-  #  UI : http://localhost:1880 (ไม่ต้อง login)
+  #  InfluxDB — Time-Series Database
+  #  UI  : http://localhost:8086
+  #  เชื่อมจาก container: http://influxdb:8086
+  # ════════════════════════════════════════════════════════
+  influxdb:
+    image: influxdb:2.7
+    container_name: influxdb
+    ports:
+      - "8086:8086"
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+      - influxdb_config:/etc/influxdb2
+    environment:
+      - TZ=${TZ}
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUXDB_USERNAME}
+      - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUXDB_PASSWORD}
+      - DOCKER_INFLUXDB_INIT_ORG=${INFLUXDB_ORG}
+      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUXDB_BUCKET}
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_ADMIN_TOKEN}
+    restart: unless-stopped
+    networks:
+      - iot_network
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # ════════════════════════════════════════════════════════
+  #  Node-RED — Flow-based IoT Automation
+  #  UI : http://localhost:1880
   # ════════════════════════════════════════════════════════
   nodered:
     image: nodered/node-red:latest
@@ -88,19 +128,25 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_TOKEN=${INFLUXDB_ADMIN_TOKEN}
+      - INFLUXDB_ORG=${INFLUXDB_ORG}
+      - INFLUXDB_BUCKET=${INFLUXDB_BUCKET}
     restart: unless-stopped
     depends_on:
       mosquitto:
         condition: service_healthy
       postgres:
         condition: service_healthy
+      influxdb:
+        condition: service_healthy
     networks:
       - iot_network
 
   # ════════════════════════════════════════════════════════
   #  N8N — Workflow Automation
-  #  UI : http://localhost:5678
-  #  ใช้ PostgreSQL เป็น backend database
+  #  UI      : http://localhost:5678
+  #  Public  : https://${N8N_DOMAIN}  (ผ่าน Cloudflare Tunnel)
   # ════════════════════════════════════════════════════════
   n8n:
     image: n8nio/n8n:latest
@@ -115,13 +161,12 @@ services:
       - N8N_HOST=0.0.0.0
       - N8N_PORT=5678
       - N8N_PROTOCOL=https
-      - WEBHOOK_URL=${NGROK_URL}/
-      - N8N_EDITOR_BASE_URL=${NGROK_URL}/
+      - WEBHOOK_URL=https://${N8N_DOMAIN}/
+      - N8N_EDITOR_BASE_URL=https://${N8N_DOMAIN}/
       - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
       - N8N_METRICS=false
       - EXECUTIONS_DATA_PRUNE=true
       - EXECUTIONS_DATA_MAX_AGE=168
-      # PostgreSQL backend
       - DB_TYPE=postgresdb
       - DB_POSTGRESDB_HOST=postgres
       - DB_POSTGRESDB_PORT=5432
@@ -138,45 +183,100 @@ services:
       - iot_network
 
   # ════════════════════════════════════════════════════════
-  #  Ollama — Local LLM Runtime (GPU)
-  #  API  : http://localhost:11434
-  #  เรียก model: docker exec -it ollama ollama pull llama3.2:3b
+  #  Home Assistant — Home Automation
+  #  UI : http://localhost:8123
   # ════════════════════════════════════════════════════════
-  ollama:
-    image: ollama/ollama:latest
-    container_name: ollama
+  homeassistant:
+    image: homeassistant/home-assistant:stable
+    container_name: homeassistant
     ports:
-      - "11434:11434"
+      - "8123:8123"
     volumes:
-      - ollama_data:/root/.ollama
+      - homeassistant_config:/config
     environment:
-      - OLLAMA_HOST=0.0.0.0
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+      - TZ=${TZ}
+    privileged: true
     restart: unless-stopped
+    networks:
+      - iot_network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8123 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ════════════════════════════════════════════════════════
+  #  Grafana — Data Visualization Dashboard
+  #  UI : http://localhost:3000
+  #  Default login: admin / (GRAFANA_ADMIN_PASSWORD)
+  # ════════════════════════════════════════════════════════
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      - TZ=${TZ}
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+    restart: unless-stopped
+    depends_on:
+      influxdb:
+        condition: service_healthy
     networks:
       - iot_network
 
   # ════════════════════════════════════════════════════════
-  #  Ngrok — Tunnel N8N to the internet
-  #  Dashboard : http://localhost:4040
+  #  Nginx Proxy Manager — Reverse Proxy + SSL
+  #  Admin UI : http://localhost:81
+  #  HTTP     : port 80
+  #  HTTPS    : port 443
+  #  Default login: admin@example.com / changeme
   # ════════════════════════════════════════════════════════
-  ngrok:
-    image: ngrok/ngrok:latest
-    container_name: ngrok
-    command: http n8n:5678 --url=${NGROK_URL}
-    environment:
-      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+  nginx-proxy-manager:
+    image: jc21/nginx-proxy-manager:latest
+    container_name: nginx-proxy-manager
     ports:
-      - "4040:4040"
-    depends_on:
-      - n8n
+      - "80:80"
+      - "443:443"
+      - "81:81"
+    volumes:
+      - npm_data:/data
+      - npm_letsencrypt:/etc/letsencrypt
     restart: unless-stopped
+    networks:
+      - iot_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:81"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ════════════════════════════════════════════════════════
+  #  Cloudflare Tunnel — เชื่อม N8N ออก Internet
+  #
+  #  Setup:
+  #  1. https://one.dash.cloudflare.com → Networks → Tunnels
+  #  2. สร้าง Tunnel → copy token → ใส่ใน .env
+  #  3. เพิ่ม Public Hostname:
+  #     n8n.yourdomain.com → http://nginx-proxy-manager:80
+  #  4. ใน Nginx Proxy Manager เพิ่ม Proxy Host:
+  #     n8n.yourdomain.com → http://n8n:5678
+  # ════════════════════════════════════════════════════════
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    restart: unless-stopped
+    depends_on:
+      nginx-proxy-manager:
+        condition: service_healthy
     networks:
       - iot_network
 
@@ -188,9 +288,14 @@ networks:
     driver: bridge
 
 volumes:
-  nodered_data:
-  n8n_data:
   mosquitto_data:
   mosquitto_log:
-  ollama_data:
   postgres_data:
+  influxdb_data:
+  influxdb_config:
+  nodered_data:
+  n8n_data:
+  homeassistant_config:
+  grafana_data:
+  npm_data:
+  npm_letsencrypt:
