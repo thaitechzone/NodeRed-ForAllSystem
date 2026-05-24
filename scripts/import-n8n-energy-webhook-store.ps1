@@ -1,7 +1,14 @@
 $ErrorActionPreference = 'Stop'
 
-# Personal project ID from existing workflows in this n8n instance
-$projectId = 'W2c0RfXLXsYRtHuM'
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$workflowPath = Join-Path $repoRoot 'flows\n8n-workflow1-collector.json'
+$containerPath = '/tmp/n8n-workflow1-collector.json'
 
-# Import workflow
-& docker exec n8n n8n import:workflow --input=/tmp/n8n-energy-webhook-store.json --projectId=$projectId | Out-Host
+& docker cp $workflowPath "n8n:$containerPath" | Out-Host
+
+$dockerArgs = @('exec', 'n8n', 'n8n', 'import:workflow', "--input=$containerPath")
+if ($env:N8N_PROJECT_ID) {
+    $dockerArgs += "--projectId=$env:N8N_PROJECT_ID"
+}
+
+& docker @dockerArgs | Out-Host

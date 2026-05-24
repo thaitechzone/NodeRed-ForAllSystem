@@ -7,6 +7,12 @@
 #   - NGROK_DOMAIN          (ngrok static domain, ไม่มี https://)
 #   - NGROK_URL             (ngrok URL for N8N/ngrok CLI, มี https://)
 #   - N8N_ENCRYPTION_KEY    (N8N encryption key - 32 char hex)
+#   - N8N_COLLECTOR_WEBHOOK_URL (Node-RED -> N8N collector webhook)
+#   - INFLUXDB_*            (InfluxDB initial setup + shared token)
+#   - GRAFANA_*             (Grafana admin user/password)
+#   - POSTGRES_*            (PostgreSQL bootstrap database)
+#   - N8N_POSTGRES_*        (PostgreSQL database/user for n8n)
+#   - GRAFANA_POSTGRES_*    (PostgreSQL database/user for Grafana)
 #
 # หมายเหตุ: Docker Compose จะอ่าน .env file โดยอัตโนมัติจาก directory เดียวกัน
 # และ ngrok service ด้านล่างจะใช้ NGROK_URL กับ --url เพื่อรองรับ ngrok CLI รุ่นใหม่
@@ -47,6 +53,13 @@ services:
     container_name: nodered
     ports:
       - "1880:1880"
+    environment:
+      - TZ=${TZ:-Asia/Bangkok}
+      - N8N_COLLECTOR_WEBHOOK_URL=${N8N_COLLECTOR_WEBHOOK_URL:?Set N8N_COLLECTOR_WEBHOOK_URL in .env}
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_ORG=${INFLUXDB_ORG:?Set INFLUXDB_ORG in .env}
+      - INFLUXDB_BUCKET=${INFLUXDB_BUCKET:?Set INFLUXDB_BUCKET in .env}
+      - INFLUXDB_TOKEN=${INFLUXDB_ADMIN_TOKEN:?Set INFLUXDB_ADMIN_TOKEN in .env}
     volumes:
       - nodered_data:/data
       - ./nodered/settings.js:/data/settings.js
@@ -54,8 +67,105 @@ services:
     depends_on:
       mosquitto:
         condition: service_healthy
+      influxdb:
+        condition: service_healthy
     networks:
       - iot_network
+
+  # ════════════════════════════════════════════════════════
+  #  InfluxDB — Time-series database for telemetry
+  #  UI/API : http://localhost:8086
+  # ════════════════════════════════════════════════════════
+  influxdb:
+    image: influxdb:2.7
+    container_name: influxdb
+    ports:
+      - "8086:8086"
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUXDB_ADMIN_USER:?Set INFLUXDB_ADMIN_USER in .env}
+      - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUXDB_ADMIN_PASSWORD:?Set INFLUXDB_ADMIN_PASSWORD in .env}
+      - DOCKER_INFLUXDB_INIT_ORG=${INFLUXDB_ORG:?Set INFLUXDB_ORG in .env}
+      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUXDB_BUCKET:?Set INFLUXDB_BUCKET in .env}
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_ADMIN_TOKEN:?Set INFLUXDB_ADMIN_TOKEN in .env}
+      - DOCKER_INFLUXDB_INIT_RETENTION=${INFLUXDB_RETENTION:-30d}
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+      - influxdb_config:/etc/influxdb2
+    restart: unless-stopped
+    networks:
+      - iot_network
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ════════════════════════════════════════════════════════
+  #  Grafana — Dashboards and visualization
+  #  UI : http://localhost:3000
+  # ════════════════════════════════════════════════════════
+  grafana:
+    image: grafana/grafana-oss:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=
+      - GF_DATABASE_TYPE=postgres
+      - GF_DATABASE_HOST=postgres:5432
+      - GF_DATABASE_NAME=${GRAFANA_POSTGRES_DB:-grafana}
+      - GF_DATABASE_USER=${GRAFANA_POSTGRES_USER:-grafana}
+      - GF_DATABASE_PASSWORD=${GRAFANA_POSTGRES_PASSWORD:?Set GRAFANA_POSTGRES_PASSWORD in .env}
+      - GF_DATABASE_SSL_MODE=disable
+      - INFLUXDB_ORG=${INFLUXDB_ORG:?Set INFLUXDB_ORG in .env}
+      - INFLUXDB_BUCKET=${INFLUXDB_BUCKET:?Set INFLUXDB_BUCKET in .env}
+      - INFLUXDB_ADMIN_TOKEN=${INFLUXDB_ADMIN_TOKEN:?Set INFLUXDB_ADMIN_TOKEN in .env}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    restart: unless-stopped
+    depends_on:
+      influxdb:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - iot_network
+
+  # ════════════════════════════════════════════════════════
+  #  PostgreSQL — Operational database for n8n and Grafana
+  #  DB : postgres:5432 (Docker internal)
+  # ════════════════════════════════════════════════════════
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      - POSTGRES_DB=${POSTGRES_DB:-postgres}
+      - N8N_POSTGRES_DB=${N8N_POSTGRES_DB:-n8n}
+      - N8N_POSTGRES_USER=${N8N_POSTGRES_USER:-n8n}
+      - N8N_POSTGRES_PASSWORD=${N8N_POSTGRES_PASSWORD:?Set N8N_POSTGRES_PASSWORD in .env}
+      - GRAFANA_POSTGRES_DB=${GRAFANA_POSTGRES_DB:-grafana}
+      - GRAFANA_POSTGRES_USER=${GRAFANA_POSTGRES_USER:-grafana}
+      - GRAFANA_POSTGRES_PASSWORD=${GRAFANA_POSTGRES_PASSWORD:?Set GRAFANA_POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    restart: unless-stopped
+    networks:
+      - iot_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   # ════════════════════════════════════════════════════════
   #  N8N — Workflow Automation
@@ -69,20 +179,34 @@ services:
     volumes:
       - n8n_data:/home/node/.n8n
     environment:
-      - TZ=${TZ}
-      - GENERIC_TIMEZONE=${TZ}
+      - TZ=${TZ:-Asia/Bangkok}
+      - GENERIC_TIMEZONE=${TZ:-Asia/Bangkok}
       - N8N_HOST=0.0.0.0
       - N8N_PORT=5678
       - N8N_PROTOCOL=https
-      - WEBHOOK_URL=${NGROK_URL}/
-      - N8N_EDITOR_BASE_URL=${NGROK_URL}/
-      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      - WEBHOOK_URL=${NGROK_URL:?Set NGROK_URL in .env}/
+      - N8N_EDITOR_BASE_URL=${NGROK_URL:?Set NGROK_URL in .env}/
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:?Set N8N_ENCRYPTION_KEY in .env}
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=${N8N_POSTGRES_DB:-n8n}
+      - DB_POSTGRESDB_USER=${N8N_POSTGRES_USER:-n8n}
+      - DB_POSTGRESDB_PASSWORD=${N8N_POSTGRES_PASSWORD:?Set N8N_POSTGRES_PASSWORD in .env}
       - N8N_METRICS=false
       - EXECUTIONS_DATA_PRUNE=true
       - EXECUTIONS_DATA_MAX_AGE=168
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_ORG=${INFLUXDB_ORG:?Set INFLUXDB_ORG in .env}
+      - INFLUXDB_BUCKET=${INFLUXDB_BUCKET:?Set INFLUXDB_BUCKET in .env}
+      - INFLUXDB_TOKEN=${INFLUXDB_ADMIN_TOKEN:?Set INFLUXDB_ADMIN_TOKEN in .env}
     restart: unless-stopped
     depends_on:
       mosquitto:
+        condition: service_healthy
+      influxdb:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
     networks:
       - iot_network
@@ -95,9 +219,9 @@ services:
   ngrok:
     image: ngrok/ngrok:latest
     container_name: ngrok
-    command: http n8n:5678 --url=${NGROK_URL}
+    command: http n8n:5678 --url=${NGROK_URL:?Set NGROK_URL in .env}
     environment:
-      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN:?Set NGROK_AUTHTOKEN in .env}
     ports:
       - "4040:4040"
     depends_on:
@@ -116,5 +240,9 @@ networks:
 volumes:
   nodered_data:
   n8n_data:
+  influxdb_data:
+  influxdb_config:
+  grafana_data:
+  postgres_data:
   mosquitto_data:
   mosquitto_log:

@@ -44,10 +44,15 @@
 | Node-RED UI | http://localhost:1880 | Flow editor + OPC-UA + MQTT |
 | N8N UI (local) | http://localhost:5678 | Workflow automation |
 | N8N UI (public) | `https://<your-domain>.ngrok-free.dev` | ใช้สำหรับ OAuth2 / Webhook |
+| InfluxDB UI/API | http://localhost:8086 | Time-series database สำหรับ telemetry |
+| Grafana UI | http://localhost:3000 | Dashboard เชื่อม InfluxDB อัตโนมัติ |
+| PostgreSQL | `postgres:5432` | Operational DB ภายในสำหรับ n8n และ Grafana |
 | ngrok Dashboard | http://localhost:4040 | ดู tunnel status |
 | MQTT Broker | `localhost:1883` | จาก Windows host / ESP32 |
 | MQTT (Docker internal) | `mosquitto:1883` | จาก container อื่น |
 | MQTT WebSocket | `localhost:9001` | สำหรับ browser client |
+
+แผนการใช้งานแบบ local และการย้ายไป VPS อยู่ใน [DEPLOYMENT-PLAN.md](DEPLOYMENT-PLAN.md)
 
 ---
 
@@ -57,15 +62,15 @@
 d:\NodeRed\
   ├── .env                        ← ตั้งค่าทั้งหมดไว้ที่นี่ (ไม่อยู่ใน Git)
   ├── docker-compose.yml          ← กำหนด services ทั้งหมด (4 services)
-  ├── setup.bat                   ← Management script (Windows)
   ├── INSTALL.md                  ← คู่มือติดตั้งฉบับเต็ม
-  ├── VPS_DEPLOY.md               ← คู่มือ deploy ไป VPS
+  ├── PROJECT-MANUAL.md           ← คู่มือ flow และ workflow
+  ├── scripts\                    ← สคริปต์ import flow/workflow
+  ├── flows\                      ← Node-RED และ n8n exports
   ├── mosquitto\
   │     └── config\
   │           └── mosquitto.conf  ← config ของ MQTT broker
   ├── nodered\
   │     └── settings.js           ← config ของ Node-RED
-  └── esp32-firmware-NodeRED\     ← firmware สำหรับ ESP32 (DS18B20 + MQTT)
 ```
 
 ---
@@ -84,9 +89,41 @@ NGROK_DOMAIN=your-domain.ngrok-free.dev
 # URL สำหรับ N8N (มี https://)
 NGROK_URL=https://your-domain.ngrok-free.dev
 
+# Node-RED → N8N Collector webhook
+N8N_COLLECTOR_WEBHOOK_URL=https://your-domain.ngrok-free.dev/webhook/energy-machine-telemetry
+
 # ─── N8N Encryption Key ──────────────────────────────────
 # สร้างด้วย PowerShell: powershell -Command "-join ((1..32) | ForEach-Object { '{0:x}' -f (Get-Random -Max 16) })"
 N8N_ENCRYPTION_KEY=change-this-to-random-32-char-string
+
+# ─── InfluxDB ────────────────────────────────────────────
+# สร้าง token 32 ตัวอักษร:
+# powershell -Command "-join ((1..32) | ForEach-Object { '{0:x}' -f (Get-Random -Max 16) })"
+INFLUXDB_ADMIN_USER=admin
+INFLUXDB_ADMIN_PASSWORD=change-this-influxdb-password
+INFLUXDB_ORG=thai-tech-zone
+INFLUXDB_BUCKET=energy
+INFLUXDB_ADMIN_TOKEN=change-this-to-a-long-random-influxdb-token
+INFLUXDB_RETENTION=30d
+
+# ─── Grafana ─────────────────────────────────────────────
+GRAFANA_ADMIN_USER=admin
+GRAFANA_ADMIN_PASSWORD=change-this-grafana-password
+
+# ─── PostgreSQL operational database ─────────────────────
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=change-this-postgres-superuser-password
+POSTGRES_DB=postgres
+
+# ─── PostgreSQL database/user for n8n ────────────────────
+N8N_POSTGRES_DB=n8n
+N8N_POSTGRES_USER=n8n
+N8N_POSTGRES_PASSWORD=change-this-n8n-postgres-password
+
+# ─── PostgreSQL database/user for Grafana ────────────────
+GRAFANA_POSTGRES_DB=grafana
+GRAFANA_POSTGRES_USER=grafana
+GRAFANA_POSTGRES_PASSWORD=change-this-grafana-postgres-password
 ```
 
 ### ตัวแปรที่ต้อง (Required)
@@ -97,7 +134,13 @@ N8N_ENCRYPTION_KEY=change-this-to-random-32-char-string
 | `NGROK_AUTHTOKEN` | ngrok authentication token |
 | `NGROK_DOMAIN` | ngrok static domain (ไม่มี `https://`) |
 | `NGROK_URL` | ngrok URL สำหรับ N8N webhook (มี `https://`) |
+| `N8N_COLLECTOR_WEBHOOK_URL` | webhook ที่ Node-RED ใช้ส่ง payload เข้า n8n collector |
 | `N8N_ENCRYPTION_KEY` | 32-char hex string สำหรับเข้ารหัส N8N credentials |
+| `INFLUXDB_*` | ตั้งค่า InfluxDB 2.x, bucket และ token สำหรับเก็บ telemetry |
+| `GRAFANA_*` | ตั้งค่า admin account ของ Grafana |
+| `POSTGRES_*` | ตั้งค่า PostgreSQL bootstrap/superuser สำหรับสร้าง database ครั้งแรก |
+| `N8N_POSTGRES_*` | database/user แยกสำหรับ n8n |
+| `GRAFANA_POSTGRES_*` | database/user แยกสำหรับ Grafana |
 
 ---
 

@@ -88,9 +88,41 @@ NGROK_AUTHTOKEN=ใส่-authtoken-ที่-copy-มา
 NGROK_DOMAIN=your-name-abc.ngrok-free.dev       # ไม่มี https://
 NGROK_URL=https://your-name-abc.ngrok-free.dev  # ใช้ static domain ของ ngrok
 
+# ─── Node-RED → N8N ───────────────────────────────────────
+N8N_COLLECTOR_WEBHOOK_URL=https://your-name-abc.ngrok-free.dev/webhook/energy-machine-telemetry
+
 # ─── N8N ─────────────────────────────────────────────────
 # สร้างด้วย PowerShell: powershell -Command "-join ((1..32) | ForEach-Object { '{0:x}' -f (Get-Random -Max 16) })"
 N8N_ENCRYPTION_KEY=random-32-char-string
+
+# ─── InfluxDB ────────────────────────────────────────────
+# สร้าง token 32 ตัวอักษร:
+# powershell -Command "-join ((1..32) | ForEach-Object { '{0:x}' -f (Get-Random -Max 16) })"
+INFLUXDB_ADMIN_USER=admin
+INFLUXDB_ADMIN_PASSWORD=เปลี่ยน-password-influxdb
+INFLUXDB_ORG=thai-tech-zone
+INFLUXDB_BUCKET=energy
+INFLUXDB_ADMIN_TOKEN=เปลี่ยนเป็น-token-ยาว-สุ่ม
+INFLUXDB_RETENTION=30d
+
+# ─── Grafana ─────────────────────────────────────────────
+GRAFANA_ADMIN_USER=admin
+GRAFANA_ADMIN_PASSWORD=เปลี่ยน-password-grafana
+
+# ─── PostgreSQL operational database ─────────────────────
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=เปลี่ยน-password-postgres-superuser
+POSTGRES_DB=postgres
+
+# ─── PostgreSQL database/user for n8n ────────────────────
+N8N_POSTGRES_DB=n8n
+N8N_POSTGRES_USER=n8n
+N8N_POSTGRES_PASSWORD=เปลี่ยน-password-n8n-postgres
+
+# ─── PostgreSQL database/user for Grafana ────────────────
+GRAFANA_POSTGRES_DB=grafana
+GRAFANA_POSTGRES_USER=grafana
+GRAFANA_POSTGRES_PASSWORD=เปลี่ยน-password-grafana-postgres
 ```
 
 > **หมายเหตุ**: Node-RED ไม่มีการ login แล้ว เข้า http://localhost:1880 ได้เลย
@@ -132,6 +164,9 @@ ngrok        ngrok/ngrok:latest       running
 | Node-RED | http://localhost:1880 | ไม่ต้อง login (ปิด authentication) |
 | N8N (local) | http://localhost:5678 | สร้าง account ครั้งแรก |
 | N8N (public) | `https://your-domain.ngrok-free.dev` | เดียวกับ local |
+| InfluxDB | http://localhost:8086 | เก็บ telemetry / metrics |
+| Grafana | http://localhost:3000 | Dashboard, datasource InfluxDB ถูก provision ให้แล้ว |
+| PostgreSQL | `postgres:5432` | Operational DB ภายในสำหรับ n8n และ Grafana |
 | ngrok Dashboard | http://localhost:4040 | ไม่ต้อง login |
 
 ---
@@ -258,8 +293,10 @@ docker stats
 ### ติดตั้งครั้งแรก
 - [ ] ติดตั้ง Docker Desktop + WSL2
 - [ ] สมัครบัญชี ngrok + สร้าง Static Domain
-- [ ] แก้ไข `.env` — ใส่ `NGROK_AUTHTOKEN`, `NGROK_DOMAIN`, `NGROK_URL`
+- [ ] แก้ไข `.env` — ใส่ `NGROK_AUTHTOKEN`, `NGROK_DOMAIN`, `NGROK_URL`, `N8N_COLLECTOR_WEBHOOK_URL`
 - [ ] แก้ไข `.env` — ตั้งค่า `N8N_ENCRYPTION_KEY`
+- [ ] แก้ไข `.env` — ตั้งค่า `INFLUXDB_*` และ `GRAFANA_*`
+- [ ] แก้ไข `.env` — ตั้งค่า `POSTGRES_*`, `N8N_POSTGRES_*`, `GRAFANA_POSTGRES_*`
 - [ ] `docker compose pull` แล้ว `docker compose up -d`
 - [ ] ตรวจสอบ ngrok tunnel: `docker logs ngrok` หรือ http://localhost:4040
 - [ ] ทดสอบเข้า Node-RED ที่ http://localhost:1880 (ไม่ต้อง login)
