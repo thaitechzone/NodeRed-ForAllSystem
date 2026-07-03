@@ -4,14 +4,15 @@ module.exports = {
     uiHost: "0.0.0.0",
 
     // ─── Security ────────────────────────────────────────────
-    adminAuth: {
+    // ใช้ environment variables สำหรับ credentials
+    adminAuth: process.env.NODERED_USERNAME && process.env.NODERED_PASSWORD_HASH ? {
         type: "credentials",
         users: [{
-            username: "admin",
-            password: "$2a$08$UL6Zwie/yZHpRf4ugI0fq.ktr8VgiYl4OtAQidorGQ7Y6n5nLIFVO",
+            username: process.env.NODERED_USERNAME || "admin",
+            password: process.env.NODERED_PASSWORD_HASH,
             permissions: "*"
         }]
-    },
+    } : undefined,
 
     // ─── Timezone ────────────────────────────────────────────
     timezone: "Asia/Bangkok",
