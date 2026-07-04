@@ -77,9 +77,15 @@ docker exec nodered printenv NODERED_PASSWORD_HASH
 
 ### ต้องทำ: สร้าง 32-character hex string
 
+### วิธีที่ 1: Node.js (ทุก platform — แนะนำ)
+
+```bash
+node -e "console.log(require('crypto').randomBytes(16).toString('hex'))"
+```
+
 ### Windows PowerShell
 
-**วิธีที่ 1: ใช้ PowerShell command (เร็วสุด)**
+**ใช้ PowerShell command:**
 
 ```powershell
 [System.Guid]::NewGuid().ToString().Replace("-","").Substring(0,32)
@@ -146,12 +152,21 @@ N8N_ENCRYPTION_KEY=8f3a2b1c9d7e5f4a6b2c1d9e8f7a3b2c
 > ✅ ค่า `INFLUXDB_ORG` / `INFLUXDB_BUCKET` / `INFLUXDB_ADMIN_TOKEN` ที่ตั้งใน `.env`
 > จะถูกใช้ init InfluxDB **อัตโนมัติ** ตอน `docker compose up -d` (ไม่ต้องสร้างใน UI)
 > — แค่สร้าง token ตามด้านล่างแล้วใส่ `.env` ก็พอ
+>
+> 📝 หมายเหตุ: **ORG / BUCKET เป็นแค่ชื่อ** ที่ตั้งเอง (เช่น `iot_org` / `iot_bucket`)
+> ไม่ต้องสุ่ม — มีแค่ **TOKEN** เท่านั้นที่ต้องสร้างแบบสุ่ม
 
 ### ต้องทำ: สร้าง 64-character hex string
 
+### วิธีที่ 1: Node.js (ทุก platform — แนะนำ)
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
 ### Windows PowerShell
 
-**วิธีที่ 1: ใช้ PowerShell command**
+**ใช้ PowerShell command:**
 
 ```powershell
 [System.Guid]::NewGuid().ToString().Replace("-","") + [System.Guid]::NewGuid().ToString().Replace("-","")
