@@ -17,55 +17,58 @@
 
 ### ต้องทำ: สร้าง bcrypt password hash
 
-### Step 1: ติดตั้ง node-red-admin
+### Step 1: สร้าง Password Hash (คำสั่งเดียว)
 
-**Windows PowerShell:**
-```powershell
-npm install -g node-red-admin
-```
+พิมพ์รหัสผ่านตรง ๆ ในคำสั่งเดียว → ได้ hash ทันที (ไม่ต้องติดตั้งอะไรล่วงหน้า `npx` จะดึง `bcryptjs` ให้เอง):
 
-**Mac/Linux Terminal:**
+**Windows / Mac / Linux (เหมือนกัน):**
 ```bash
-npm install -g node-red-admin
+npx bcryptjs "รหัสผ่านที่ต้องการ" 8
 ```
 
-### Step 2: สร้าง Password Hash
+> เลข `8` ท้ายสุดคือจำนวน bcrypt rounds (ค่ามาตรฐานของ Node-RED)
 
-**Windows PowerShell:**
-```powershell
-node-red-admin hash-pw
+**ทางเลือกอื่น:**
+- แบบโต้ตอบ: `npm install -g node-red-admin` แล้ว `node-red-admin hash-pw` (พิมพ์รหัส 2 ครั้ง)
+- Online: https://bcrypt.online/ (ใส่ password, ตั้ง Rounds = 8, กด Hash)
+
+### Step 2: Copy Hash ที่ได้
+
+**Output ตัวอย่าง:**
+```
+$2b$08$e9VVIc9vJpnsw9LotxfoeOB.EfPAxbZ39HDts2DEbY38Gm5M2r7X2
 ```
 
-**Mac/Linux Terminal:**
-```bash
-node-red-admin hash-pw
-```
+### Step 3: 🔴 escape `$` เป็น `$$` แล้วใส่ลง .env
 
-### Step 3: ใส่รหัสผ่าน
+> ### ⚠️⚠️ จุดพลาดบ่อยที่สุด — ต้อง escape ก่อนวาง!
+>
+> Docker Compose ตีความ `$` เป็นตัวแปร ถ้าวาง hash ดิบ ๆ → hash ขาด → **login ไม่ได้**
+> ให้เปลี่ยน `$` **ทุกตัว** เป็น `$$`
 
-```
-Password: (พิมพ์รหัสผ่านที่ต้องการ - ตัวอักษรไม่แสดง)
-Confirm password: (พิมพ์รหัสผ่านอีกครั้ง)
-```
-
-### Step 4: Copy Hash ที่ได้
-
-**Output:**
-```
-$2a$08$KLaz9xM2VLaIza/example/hash/output/here
-```
+| | ค่า |
+|---|---|
+| hash ที่ generator ให้มา | `$2b$08$e9VV...` |
+| ที่ต้องวางใน `.env` | `$$2b$$08$$e9VV...` |
 
 **ใส่ลงใน .env:**
 ```env
-NODERED_PASSWORD_HASH=$2a$08$KLaz9xM2VLaIza/example/hash/output/here
+NODERED_PASSWORD_HASH=$$2b$$08$$e9VVIc9vJpnsw9LotxfoeOB.EfPAxbZ39HDts2DEbY38Gm5M2r7X2
 ```
 
 ### ⚠️ ตรวจสอบ Hash
 
 ```
-✓ ต้องเริ่มด้วย: $2a$ หรือ $2b$
-✓ ต้องยาว: 60 ตัวอักษร
+✓ ต้องเริ่มด้วย: $2a$ หรือ $2b$  (ก่อน escape)
+✓ ต้องยาว: 60 ตัวอักษร  (นับแบบ $ เดี่ยว)
+✓ ใน .env ต้อง escape เป็น $$ ทุกตัว
 ✓ ไม่มี: space หรือ newline
+```
+
+**ยืนยันว่า container ได้รับ hash ถูกต้อง** (หลัง `docker compose up -d`):
+```bash
+docker exec nodered printenv NODERED_PASSWORD_HASH
+# ต้องได้ hash เต็ม 60 ตัว ($ เดี่ยว) — ถ้าสั้นกว่านั้นแปลว่ายังไม่ได้ escape $$
 ```
 
 ---
@@ -140,6 +143,10 @@ N8N_ENCRYPTION_KEY=8f3a2b1c9d7e5f4a6b2c1d9e8f7a3b2c
 
 ## 🎫 InfluxDB Admin Token
 
+> ✅ ค่า `INFLUXDB_ORG` / `INFLUXDB_BUCKET` / `INFLUXDB_ADMIN_TOKEN` ที่ตั้งใน `.env`
+> จะถูกใช้ init InfluxDB **อัตโนมัติ** ตอน `docker compose up -d` (ไม่ต้องสร้างใน UI)
+> — แค่สร้าง token ตามด้านล่างแล้วใส่ `.env` ก็พอ
+
 ### ต้องทำ: สร้าง 64-character hex string
 
 ### Windows PowerShell
@@ -210,7 +217,7 @@ INFLUXDB_ADMIN_TOKEN=8f3a2b1c9d7e5f4a6b2c1d9e8f7a3b2c8f3a2b1c9d7e5f4a6b2c1d9e8f7
 
 ```
 1. NODERED_PASSWORD_HASH ✓
-   (จาก node-red-admin hash-pw)
+   (จาก npx bcryptjs — escape $$ แล้ว)
 
 2. N8N_ENCRYPTION_KEY ✓
    (32-char hex from PowerShell/openssl)
@@ -223,8 +230,9 @@ INFLUXDB_ADMIN_TOKEN=8f3a2b1c9d7e5f4a6b2c1d9e8f7a3b2c8f3a2b1c9d7e5f4a6b2c1d9e8f7
 
 ```env
 # ── Node-RED Login ────────────────────────────────────────
+# ⚠️ hash ต้อง escape $ เป็น $$ (ดู Step 3 ด้านบน)
 NODERED_USERNAME=admin
-NODERED_PASSWORD_HASH=$2a$08$KLaz9xM2VLaIza/example/hash/output/here
+NODERED_PASSWORD_HASH=$$2b$$08$$e9VVIc9vJpnsw9LotxfoeOB.EfPAxbZ39HDts2DEbY38Gm5M2r7X2
 
 # ── Cloudflare Tunnel (Optional) ──────────────────────────
 CLOUDFLARE_TUNNEL_TOKEN=your-cloudflare-tunnel-token-here
@@ -262,9 +270,22 @@ TZ=Asia/Bangkok
    - http://localhost:8086 (InfluxDB)
    - http://localhost:3000 (Grafana)
 
+> 📖 ขั้นตอนสร้างระบบเต็ม ๆ (รวมตั้งค่า InfluxDB / Grafana / Cloudflare) ดู **[README.md](README.md)**
+
 ---
 
 ## ❓ Troubleshooting
+
+### ❌ Node-RED login ไม่ได้ (รหัสถูกแต่เข้าไม่ได้)
+
+**สาเหตุ:** ไม่ได้ escape `$` เป็น `$$` ใน `.env` → hash ที่ส่งเข้า container ขาด
+
+**แก้ไข:**
+```bash
+docker exec nodered printenv NODERED_PASSWORD_HASH   # ต้องได้ 60 ตัว
+```
+- ถ้าสั้นกว่า 60 → แก้ `.env` ให้ `$` ทุกตัวเป็น `$$` แล้ว `docker compose up -d nodered`
+- ห้ามใช้ `docker compose restart` (ไม่โหลดค่า .env ใหม่)
 
 ### ❌ "npm: command not found"
 
@@ -278,7 +299,7 @@ TZ=Asia/Bangkok
 **แก้ไข:**
 - ใช้ PowerShell command แทน:
   ```powershell
-  openssl rand -hex 32
+  [System.Guid]::NewGuid().ToString().Replace("-","")
   ```
 - หรือติดตั้ง Git Bash
 
@@ -292,6 +313,7 @@ TZ=Asia/Bangkok
 
 ## 📖 Reference
 
+- [README.md](README.md) — คู่มือสร้างระบบทั้งหมด
+- [bcryptjs (npm)](https://www.npmjs.com/package/bcryptjs)
 - [node-red-admin GitHub](https://github.com/node-red/node-red-admin)
-- [OpenSSL Documentation](https://www.openssl.org/)
 - [Node.js Official](https://nodejs.org/)

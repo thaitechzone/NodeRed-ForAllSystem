@@ -1,5 +1,7 @@
 # ESP32 SmartFarm — MQTT Telemetry Firmware
 
+> 🏠 เป็นส่วนหนึ่งของโปรเจกต์ [IoT Stack](../README.md) — firmware ฝั่งอุปกรณ์ที่ส่งข้อมูลเข้า Mosquitto → Node-RED → InfluxDB
+>
 > PlatformIO project สำหรับส่งข้อมูล sensor ไปยัง MQTT Broker ทุก 5 วินาที
 >
 > **Temperature sensor:** DS18B20 บน GPIO14 (OneWire)
@@ -33,7 +35,7 @@ esp32-firmware-NodeRED/
 ## ขั้นตอนที่ 2 — เปิด Project
 
 ```
-File → Open Folder → เลือก d:\NodeRed\esp32-firmware-NodeRED
+File → Open Folder → เลือกโฟลเดอร์ esp32-firmware-NodeRED (ในโปรเจกต์นี้)
 ```
 
 PlatformIO จะตรวจพบ `platformio.ini` อัตโนมัติและดาวน์โหลด libraries

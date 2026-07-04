@@ -13,7 +13,19 @@
       "Bash(curl -s -X POST 'http://localhost:8086/api/v2/query?org=iot' -H 'Authorization: Token ZEFqwNspJYEQ8HAucne-PUUHohOsl18e8nRfu_3q0_o3Z_qoluzc3Od_f8w32MSCir0CBDhm5AyGpF8soK3clQ==' -H 'Content-Type: application/vnd.flux' --data 'from\\(bucket:\"sensors\"\\) *)",
       "Bash(node -e \"require\\('bcryptjs'\\)\")",
       "Bash(node -e \"const crypto=require\\('crypto'\\); console.log\\(crypto.getHashes\\(\\).includes\\('sha256'\\)\\)\")",
-      "Bash(powershell -Command \"-join \\(\\(1..32\\) | ForEach-Object { '{0:x}' -f \\(Get-Random -Max 16\\) }\\)\")"
+      "Bash(powershell -Command \"-join \\(\\(1..32\\) | ForEach-Object { '{0:x}' -f \\(Get-Random -Max 16\\) }\\)\")",
+      "Bash(npx --version)",
+      "Bash(node-red-admin --version)",
+      "Bash(node-red admin *)",
+      "Bash(node -e ' *)",
+      "Bash(npx --yes bcryptjs)",
+      "Bash(npx --yes bcryptjs password123 8)",
+      "Bash(node generate-password.js \"MySecret123\")",
+      "Bash(docker compose *)",
+      "Bash(docker exec *)",
+      "Bash(mkdir -p C:/Users/thait/AppData/Local/Temp/claude/d--GitHubData-NodeRed-ForAllSystem/b8f1bddf-59c6-4d00-b322-c2998e91d028/scratchpad/envtest5)",
+      "Bash(printf 'MY_HASH=$2b$08$e9VVIc9vJpnsw9LotxfoeOB.EfPAxbZ39HDts2DEbY38Gm5M2r7X2\\\\nPLAIN=hello123\\\\n')",
+      "Bash(docker volume *)"
     ]
   }
 }

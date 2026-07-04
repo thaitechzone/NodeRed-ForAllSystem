@@ -55,8 +55,10 @@ services:
   #  UI  : http://localhost:8086
   #  เชื่อมจาก container: http://influxdb:8086
   #
-  #  ORG / BUCKET / TOKEN: สร้างเอง ผ่าน InfluxDB UI
-  #  ดู: INFLUXDB_SETUP.md
+  #  ORG / BUCKET / TOKEN: init อัตโนมัติจาก .env (ไม่ต้องตั้งใน UI)
+  #  ⚠️ ค่าเหล่านี้ init เฉพาะตอน volume ว่าง (ครั้งแรก) เท่านั้น
+  #     ถ้าเคยรันแล้วต้องแก้ ให้ล้าง volume: docker compose down -v
+  #  ดู: README.md (Step 5)
   # ════════════════════════════════════════════════════════
   influxdb:
     image: influxdb:2.7
@@ -71,9 +73,9 @@ services:
       - DOCKER_INFLUXDB_INIT_MODE=setup
       - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUXDB_USERNAME}
       - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUXDB_PASSWORD}
-      - DOCKER_INFLUXDB_INIT_ORG=initial_org
-      - DOCKER_INFLUXDB_INIT_BUCKET=initial_bucket
-      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=initial_token_create_new_one
+      - DOCKER_INFLUXDB_INIT_ORG=${INFLUXDB_ORG}
+      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUXDB_BUCKET}
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_ADMIN_TOKEN}
     restart: unless-stopped
     networks:
       - iot_network
@@ -176,7 +178,7 @@ services:
   #  Default login: admin / (GRAFANA_ADMIN_PASSWORD)
   #
   #  InfluxDB DataSource: ตั้งเอง ผ่าน Grafana UI
-  #  ดู: INFLUXDB_SETUP.md
+  #  ดู: README.md (Step 5)
   # ════════════════════════════════════════════════════════
   grafana:
     image: grafana/grafana:latest

@@ -4,6 +4,13 @@
 
 # Environment variables (contains secrets — never commit)
 .env
+.env.*
+!.env.example
+!.env.enc
+
+# Secret keys (SOPS/age decryption key — never commit)
+key.txt
+*.agekey
 
 # Node-RED data
 node-red/data/
